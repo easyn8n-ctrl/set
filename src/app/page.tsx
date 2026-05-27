@@ -25,8 +25,9 @@ import {
   Utensils, Scissors, Home as HomeIcon, Building2, Car, GraduationCap,
   CheckCircle2, AlertCircle, MessageCircle, ArrowLeft,
   Lock, DollarSign, TrendingUp, Package, RefreshCw, CreditCard, Loader2, LogOut, ChevronLeft, ChevronRight,
+  BarChart3,
   Palette, Languages, MapPin, Download, Bot, UserCircle, Info, MessageSquare, EyeOff, UserPlus,
-  ImagePlus, Link2, Copy, Upload, Trash2, ZoomIn, Plus
+  ImagePlus, Link2, Copy, Upload, Trash2, ZoomIn, Plus, Tag
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useSession, signIn, signOut } from 'next-auth/react';
@@ -327,6 +328,11 @@ interface OrderItem {
   amount: number;
   createdAt: string;
   stripeSessionId?: string;
+  promoCode?: string;
+  discountAmount?: number;
+  adminNotes?: string;
+  paidAt?: string;
+  deliveredAt?: string;
 }
 
 interface StatsData {
@@ -336,6 +342,19 @@ interface StatsData {
   inProgressOrders: number;
   deliveredOrders: number;
   totalRevenue: number;
+}
+
+interface PromoCode {
+  id: string;
+  code: string;
+  discountPercent: number | null;
+  discountAmount: number | null;
+  maxUses: number;
+  usedCount: number;
+  isActive: boolean;
+  expiresAt: string | null;
+  minOrderAmount: number;
+  createdAt: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -410,17 +429,36 @@ export default function Home() {
   const [adminPassword, setAdminPassword] = useState('');
   const [adminLoginError, setAdminLoginError] = useState('');
   const [adminLoggingIn, setAdminLoggingIn] = useState(false);
+  const [adminToken, setAdminToken] = useState<string | null>(null);
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [stats, setStats] = useState<StatsData | null>(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
   const [orderSearch, setOrderSearch] = useState('');
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderTotalPages, setOrderTotalPages] = useState(1);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null);
   const [orderDetailOpen, setOrderDetailOpen] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(false);
+  const [editOrderData, setEditOrderData] = useState<Record<string, string>>({});
   const [paymentStep, setPaymentStep] = useState<'form' | 'payment' | 'success'>('form');
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [createdOrderId, setCreatedOrderId] = useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+
+  // Promo Code state
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<{ valid: boolean; code: string; discount: number } | null>(null);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [adminPromos, setAdminPromos] = useState<PromoCode[]>([]);
+  const [promoDialogOpen, setPromoDialogOpen] = useState(false);
+  const [newPromo, setNewPromo] = useState({ code: '', discountPercent: '', discountAmount: '', maxUses: '100', expiresAt: '', minOrderAmount: '0' });
+
+  // Admin tab state
+  const [adminTab, setAdminTab] = useState<'overview' | 'orders' | 'products' | 'promos' | 'payments'>('overview');
 
   // Currency state
   const [userCurrency, setUserCurrency] = useState('CAD');
@@ -765,45 +803,116 @@ export default function Home() {
   const calculatePrice = () => {
     const extraServices = Math.max(0, selectedServices.length - 3);
     const extraCost = extraServices * 30;
-    return { basePrice: 700, extraServices, extraCost, totalPrice: 700 + extraCost };
+    const baseTotal = 700 + extraCost;
+    const discount = appliedPromo?.valid ? appliedPromo.discount : 0;
+    return { basePrice: 700, extraServices, extraCost, discount, totalPrice: Math.max(0, baseTotal - discount) };
   };
+
+  // Restore admin session from localStorage
+  useEffect(() => {
+    const savedToken = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
+    const savedAdmin = typeof window !== 'undefined' ? localStorage.getItem('admin_data') : null;
+    if (savedToken && savedAdmin) {
+      setAdminToken(savedToken);
+      setAdminLoggedIn(true);
+    }
+  }, []);
 
   // Fetch admin stats
   const fetchStats = useCallback(async () => {
     try {
-      const res = await fetch('/api/admin/stats');
+      const token = adminToken || (typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null);
+      if (!token) return;
+      const res = await fetch('/api/admin/stats', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
       if (res.ok) {
         const data = await res.json();
         setStats(data);
+      } else {
+        // Token invalid, logout
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_data');
+        setAdminToken(null);
+        setAdminLoggedIn(false);
       }
     } catch {
       // silently fail
     }
-  }, []);
+  }, [adminToken]);
 
   // Fetch orders
   const fetchOrders = useCallback(async () => {
     try {
+      const token = adminToken || (typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null);
+      if (!token) return;
       const params = new URLSearchParams();
       if (orderStatusFilter !== 'all') params.set('status', orderStatusFilter);
       if (orderSearch) params.set('search', orderSearch);
-      params.set('limit', '50');
-      const res = await fetch(`/api/orders?${params.toString()}`);
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
+      params.set('page', String(orderPage));
+      params.set('limit', '20');
+      const res = await fetch(`/api/orders?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
       if (res.ok) {
         const data = await res.json();
-        setOrders(data.orders || data || []);
+        setOrders(data.orders || []);
+        if (data.pagination) setOrderTotalPages(data.pagination.totalPages || 1);
       }
     } catch {
       // silently fail
     }
-  }, [orderStatusFilter, orderSearch]);
+  }, [orderStatusFilter, orderSearch, orderPage, dateFrom, dateTo, adminToken]);
+
+  // Fetch promo codes (admin)
+  const fetchPromos = useCallback(async () => {
+    try {
+      const token = adminToken || (typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null);
+      if (!token) return;
+      const res = await fetch('/api/admin/promo-codes', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAdminPromos(data.promoCodes || data || []);
+      }
+    } catch { /* silently */ }
+  }, [adminToken]);
+
+  // Validate promo code (customer-facing)
+  const handleValidatePromo = async () => {
+    if (!promoInput.trim()) return;
+    setPromoLoading(true);
+    try {
+      const { totalPrice } = calculatePrice();
+      const res = await fetch('/api/promo-codes/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoInput.trim(), orderAmount: totalPrice * 100 }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        const discount = data.discountCalculated / 100;
+        setAppliedPromo({ valid: true, code: promoInput.trim(), discount });
+      } else {
+        setAppliedPromo({ valid: false, code: promoInput.trim(), discount: 0 });
+      }
+    } catch {
+      setAppliedPromo({ valid: false, code: promoInput.trim(), discount: 0 });
+    } finally {
+      setPromoLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (view === 'admin' && adminLoggedIn) {
       fetchOrders();
       fetchStats();
+      if (adminTab === 'promos') fetchPromos();
     }
-  }, [view, adminLoggedIn, fetchOrders, fetchStats]);
+  }, [view, adminLoggedIn, fetchOrders, fetchStats, adminTab, fetchPromos]);
 
   // Admin login handler
   const handleAdminLogin = async () => {
@@ -817,6 +926,9 @@ export default function Home() {
       });
       const data = await res.json();
       if (res.ok && data.admin) {
+        localStorage.setItem('admin_token', data.token);
+        localStorage.setItem('admin_data', JSON.stringify(data.admin));
+        setAdminToken(data.token);
         setAdminLoggedIn(true);
         setAdminLoginOpen(false);
         setView('admin');
@@ -832,7 +944,24 @@ export default function Home() {
     }
   };
 
-  // Submit order + proceed to payment
+  // Admin logout
+  const handleAdminLogout = () => {
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_data');
+    setAdminToken(null);
+    setAdminLoggedIn(false);
+    setOrders([]);
+    setStats(null);
+    setView('store');
+  };
+
+  // Get auth headers helper
+  const getAuthHeaders = () => {
+    const token = adminToken || (typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null);
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  };
+
+  // Submit order + proceed to payment (with promo code)
   const handleSubmitOrder = async () => {
     if (!formData.businessName || !formData.city || !formData.phone) return;
     setIsSubmittingOrder(true);
@@ -851,20 +980,18 @@ export default function Home() {
           service3: selectedServices[2] || '',
           websiteType: selectedProduct?.title || formData.businessType,
           amount: amountInCents,
+          promoCode: appliedPromo?.valid ? appliedPromo.code : undefined,
         }),
       });
       const data = await res.json();
       if (res.ok) {
         if (data.url) {
-          // Stripe is configured, redirect
           window.location.href = data.url;
         } else if (data.orderId || data.order?.id) {
-          // No Stripe, show demo payment
           setCreatedOrderId(data.orderId || data.order.id);
           setPaymentStep('payment');
         }
       } else {
-        // Fallback: try creating order only
         const orderRes = await fetch('/api/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -877,6 +1004,7 @@ export default function Home() {
             service3: selectedServices[2] || '',
             websiteType: selectedProduct?.title || formData.businessType,
             amount: amountInCents,
+            promoCode: appliedPromo?.valid ? appliedPromo.code : undefined,
           }),
         });
         const orderData = await orderRes.json();
@@ -886,7 +1014,6 @@ export default function Home() {
         }
       }
     } catch {
-      // Create order locally as fallback
       setCreatedOrderId('demo-' + Date.now());
       setPaymentStep('payment');
     } finally {
@@ -920,7 +1047,7 @@ export default function Home() {
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ status: newStatus }),
       });
       if (res.ok) {
@@ -935,6 +1062,110 @@ export default function Home() {
     } finally {
       setUpdatingStatus(false);
     }
+  };
+
+  // Delete order
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!confirm('Are you sure you want to delete this order? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (res.ok) {
+        setOrders(orders.filter(o => o.id !== orderId));
+        setOrderDetailOpen(false);
+        setSelectedOrder(null);
+        fetchStats();
+      }
+    } catch { /* silently */ }
+  };
+
+  // Bulk status update
+  const handleBulkStatusUpdate = async (newStatus: string) => {
+    if (selectedOrders.length === 0) return;
+    try {
+      await Promise.all(selectedOrders.map(id =>
+        fetch(`/api/orders/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          body: JSON.stringify({ status: newStatus }),
+        })
+      ));
+      setSelectedOrders([]);
+      fetchOrders();
+      fetchStats();
+    } catch { /* silently */ }
+  };
+
+  // Save edited order
+  const handleSaveEditOrder = async () => {
+    if (!selectedOrder) return;
+    try {
+      const res = await fetch(`/api/orders/${selectedOrder.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify(editOrderData),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedOrder(data.order || { ...selectedOrder, ...editOrderData });
+        setEditingOrder(false);
+        fetchOrders();
+      }
+    } catch { /* silently */ }
+  };
+
+  // Create promo code
+  const handleCreatePromo = async () => {
+    if (!newPromo.code.trim()) return;
+    try {
+      const res = await fetch('/api/admin/promo-codes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({
+          code: newPromo.code.trim().toUpperCase(),
+          discountPercent: newPromo.discountPercent ? parseInt(newPromo.discountPercent) : null,
+          discountAmount: newPromo.discountAmount ? parseInt(newPromo.discountAmount) * 100 : null,
+          maxUses: parseInt(newPromo.maxUses) || 100,
+          expiresAt: newPromo.expiresAt || null,
+          minOrderAmount: parseInt(newPromo.minOrderAmount) * 100 || 0,
+        }),
+      });
+      if (res.ok) {
+        setNewPromo({ code: '', discountPercent: '', discountAmount: '', maxUses: '100', expiresAt: '', minOrderAmount: '0' });
+        fetchPromos();
+      }
+    } catch { /* silently */ }
+  };
+
+  // Delete promo code
+  const handleDeletePromo = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/promo-codes`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) fetchPromos();
+    } catch { /* silently */ }
+  };
+
+  // Export orders to CSV
+  const handleExportCSV = () => {
+    const headers = ['ID', 'Business', 'Type', 'City', 'Status', 'Amount', 'Currency', 'Date', 'Email', 'Phone'];
+    const rows = orders.map(o => [
+      o.id, o.businessName, o.businessType, o.city, o.status,
+      (o.amount / 100).toFixed(2), o.currency || 'CAD', o.createdAt, o.email, o.phone
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `webcraft-orders-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Export order to PDF
@@ -1824,37 +2055,50 @@ export default function Home() {
                 WebCraft
               </span>
               <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 ml-2">
-                Admin Dashboard
+                Admin
               </Badge>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="rounded-full"
-              >
+              <Button variant="ghost" size="icon" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="rounded-full">
                 {mounted ? (theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />) : <Sun className="h-4 w-4" />}
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => {
-                  setView('store');
-                  setAdminLoggedIn(false);
-                }}
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to Store
+              <Button variant="outline" size="sm" className="gap-2" onClick={handleAdminLogout}>
+                <LogOut className="h-4 w-4" />
+                Logout
               </Button>
             </div>
+          </div>
+          {/* Admin Tabs */}
+          <div className="flex gap-1 pb-3 -mt-1 overflow-x-auto">
+            {([
+              { id: 'overview' as const, label: 'Overview', icon: BarChart3 },
+              { id: 'orders' as const, label: 'Orders', icon: Package },
+              { id: 'products' as const, label: 'Products', icon: ShoppingBag },
+              { id: 'promos' as const, label: 'Promo Codes', icon: Tag },
+              { id: 'payments' as const, label: 'Payments', icon: CreditCard },
+            ]).map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setAdminTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                  adminTab === tab.id
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                }`}
+              >
+                <tab.icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
       </header>
 
       {/* Admin Content */}
       <main className="flex-1 container mx-auto px-4 py-6 space-y-6">
+        {/* ====== OVERVIEW TAB ====== */}
+        {adminTab === 'overview' && (
+          <>
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
@@ -1962,9 +2206,14 @@ export default function Home() {
             </CardContent>
           </Card>
         </motion.div>
+          </>
+        )}
 
+        {/* ====== ORDERS TAB ====== */}
+        {adminTab === 'orders' && (
+          <>
         {/* Orders Table */}
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <Card className="border-border/50">
             <CardHeader className="pb-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1973,7 +2222,7 @@ export default function Home() {
                   Orders
                 </CardTitle>
                 <div className="flex items-center gap-3 w-full sm:w-auto">
-                  <Select value={orderStatusFilter} onValueChange={setOrderStatusFilter}>
+                  <Select value={orderStatusFilter} onValueChange={(v) => { setOrderStatusFilter(v); setOrderPage(1); }}>
                     <SelectTrigger className="w-[160px]">
                       <SelectValue placeholder="Filter by status" />
                     </SelectTrigger>
@@ -1992,9 +2241,12 @@ export default function Home() {
                       placeholder="Search orders..."
                       className="pl-9 sm:w-[220px]"
                       value={orderSearch}
-                      onChange={(e) => setOrderSearch(e.target.value)}
+                      onChange={(e) => { setOrderSearch(e.target.value); setOrderPage(1); }}
                     />
                   </div>
+                  <Button variant="outline" size="sm" className="gap-1.5 hidden sm:flex" onClick={handleExportCSV}>
+                    <Download className="h-3.5 w-3.5" /> CSV
+                  </Button>
                   <Button variant="outline" size="icon" onClick={() => { fetchOrders(); fetchStats(); }}>
                     <RefreshCw className="h-4 w-4" />
                   </Button>
@@ -2006,6 +2258,14 @@ export default function Home() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-[40px]">
+                        <Checkbox
+                          checked={filteredOrders.length > 0 && selectedOrders.length === filteredOrders.length}
+                          onCheckedChange={(checked) => {
+                            setSelectedOrders(checked ? filteredOrders.map(o => o.id) : []);
+                          }}
+                        />
+                      </TableHead>
                       <TableHead className="w-[80px]">ID</TableHead>
                       <TableHead>Business</TableHead>
                       <TableHead className="hidden md:table-cell">Type</TableHead>
@@ -2021,12 +2281,17 @@ export default function Home() {
                       <TableRow
                         key={order.id}
                         className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => {
-                          setSelectedOrder(order);
-                          setOrderDetailOpen(true);
-                        }}
                       >
-                        <TableCell className="font-mono text-xs">
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedOrders.includes(order.id)}
+                            onCheckedChange={(checked) => {
+                              setSelectedOrders(checked ? [...selectedOrders, order.id] : selectedOrders.filter(id => id !== order.id));
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </TableCell>
+                        <TableCell className="font-mono text-xs" onClick={() => { setSelectedOrder(order); setOrderDetailOpen(true); }}>
                           {order.id.length > 8 ? order.id.substring(0, 8) + '...' : order.id}
                         </TableCell>
                         <TableCell className="font-medium">{order.businessName || 'N/A'}</TableCell>
@@ -2078,6 +2343,251 @@ export default function Home() {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Pagination */}
+        {orderTotalPages > 1 && (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">Page {orderPage} of {orderTotalPages}</p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" disabled={orderPage <= 1} onClick={() => setOrderPage(p => p - 1)}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> Previous
+              </Button>
+              <Button variant="outline" size="sm" disabled={orderPage >= orderTotalPages} onClick={() => setOrderPage(p => p + 1)}>
+                Next <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Actions */}
+        {selectedOrders.length > 0 && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+            <span className="text-sm font-medium">{selectedOrders.length} selected</span>
+            <Select onValueChange={(v) => handleBulkStatusUpdate(v)}>
+              <SelectTrigger className="w-[180px] h-8 text-xs"><SelectValue placeholder="Change status..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="paid">Mark as Paid</SelectItem>
+                <SelectItem value="in-progress">Mark as In Progress</SelectItem>
+                <SelectItem value="delivered">Mark as Delivered</SelectItem>
+                <SelectItem value="expired">Mark as Expired</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={() => setSelectedOrders([])}>Clear</Button>
+          </motion.div>
+        )}
+          </>
+        )}
+
+        {/* ====== PRODUCTS TAB ====== */}
+        {adminTab === 'products' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {products.map((product) => (
+              <motion.div key={product.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                <Card className="border-border/50 overflow-hidden">
+                  {/* Product Preview Image */}
+                  <div className={`h-36 bg-gradient-to-br ${sitePreviews[product.image] || 'from-gray-500 to-gray-600'} relative`}>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="bg-white/10 backdrop-blur-md rounded-xl p-3">
+                        <product.icon className="h-8 w-8 text-white" />
+                      </div>
+                    </div>
+                    {product.popular && (
+                      <Badge className="absolute top-3 right-3 bg-emerald-500 text-white text-xs">Popular</Badge>
+                    )}
+                    <Badge className="absolute top-3 left-3 bg-black/40 text-white text-xs backdrop-blur-sm">
+                      {product.category}
+                    </Badge>
+                  </div>
+                  <CardContent className="p-4 space-y-3">
+                    <div>
+                      <h3 className="font-semibold text-sm">{product.title}</h3>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{product.description}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs text-muted-foreground">Included Services:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {product.services.slice(0, 3).map((s, i) => (
+                          <Badge key={i} variant="secondary" className="text-[10px] px-1.5 py-0">{s.split(' ').slice(0, 2).join(' ')}</Badge>
+                        ))}
+                        {product.services.length > 3 && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">+{product.services.length - 3}</Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-border">
+                      <div>
+                        <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">$700</span>
+                        <span className="text-xs text-muted-foreground ml-1">CAD</span>
+                      </div>
+                      <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs">
+                        <Check className="h-3 w-3 mr-1" /> Active
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {/* ====== PROMO CODES TAB ====== */}
+        {adminTab === 'promos' && (
+          <>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Tag className="h-5 w-5 text-emerald-500" />
+                Promo Codes
+              </h3>
+              <Button size="sm" className="gap-1.5" onClick={() => setPromoDialogOpen(true)}>
+                <Plus className="h-4 w-4" /> Create Promo
+              </Button>
+            </div>
+            {adminPromos.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {adminPromos.map((promo) => (
+                  <Card key={promo.id} className="border-border/50">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <code className="text-sm font-bold bg-muted px-2 py-1 rounded">{promo.code}</code>
+                        <Badge className={promo.isActive ? 'bg-emerald-500/10 text-emerald-600 text-xs' : 'bg-red-500/10 text-red-500 text-xs'}>
+                          {promo.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        <p>Discount: <strong>{promo.discountPercent ? `${promo.discountPercent}%` : `${((promo.discountAmount || 0) / 100).toFixed(2)} CAD`}</strong></p>
+                        <p className="text-muted-foreground">Used: {promo.usedCount} / {promo.maxUses}</p>
+                        {promo.expiresAt && <p className="text-muted-foreground text-xs">Expires: {new Date(promo.expiresAt).toLocaleDateString()}</p>}
+                      </div>
+                      <div className="flex items-center justify-between pt-2 border-t border-border">
+                        <Progress value={(promo.usedCount / promo.maxUses) * 100} className="h-2 flex-1 mr-3" />
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => handleDeletePromo(promo.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Card className="border-border/50">
+                <CardContent className="py-12 text-center text-muted-foreground">
+                  <Tag className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                  <p>No promo codes yet. Create one to offer discounts.</p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Create Promo Dialog */}
+            <Dialog open={promoDialogOpen} onOpenChange={setPromoDialogOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Create Promo Code</DialogTitle>
+                  <DialogDescription>Create a new discount code for customers</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                  <div className="space-y-1.5">
+                    <Label>Code</Label>
+                    <Input placeholder="e.g. SUMMER2026" value={newPromo.code} onChange={e => setNewPromo({...newPromo, code: e.target.value.toUpperCase()})} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Discount %</Label>
+                      <Input type="number" placeholder="e.g. 15" value={newPromo.discountPercent} onChange={e => setNewPromo({...newPromo, discountPercent: e.target.value, discountAmount: ''})} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Discount $</Label>
+                      <Input type="number" placeholder="e.g. 50" value={newPromo.discountAmount} onChange={e => setNewPromo({...newPromo, discountAmount: e.target.value, discountPercent: ''})} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Max Uses</Label>
+                      <Input type="number" value={newPromo.maxUses} onChange={e => setNewPromo({...newPromo, maxUses: e.target.value})} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Min Order ($)</Label>
+                      <Input type="number" value={newPromo.minOrderAmount} onChange={e => setNewPromo({...newPromo, minOrderAmount: e.target.value})} />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Expires At (optional)</Label>
+                    <Input type="date" value={newPromo.expiresAt} onChange={e => setNewPromo({...newPromo, expiresAt: e.target.value})} />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setPromoDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleCreatePromo} disabled={!newPromo.code.trim() || (!newPromo.discountPercent && !newPromo.discountAmount)}>Create</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </>
+        )}
+
+        {/* ====== PAYMENTS TAB ====== */}
+        {adminTab === 'payments' && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+            <Card className="border-border/50">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <CreditCard className="h-5 w-5 text-emerald-500" />
+                    Payment Transactions
+                  </CardTitle>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExportCSV}>
+                    <Download className="h-3.5 w-3.5" /> Export CSV
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {orders.filter(o => o.status === 'paid' || o.status === 'delivered').length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order ID</TableHead>
+                        <TableHead>Business</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Promo</TableHead>
+                        <TableHead>Date Paid</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {orders.filter(o => o.status === 'paid' || o.status === 'delivered').map(order => (
+                        <TableRow key={order.id} className="cursor-pointer" onClick={() => { setSelectedOrder(order); setOrderDetailOpen(true); }}>
+                          <TableCell className="font-mono text-xs">{order.id.slice(0, 8)}...</TableCell>
+                          <TableCell className="font-medium">{order.businessName}</TableCell>
+                          <TableCell className="font-semibold text-emerald-600">
+                            {formatPrice((order.amount - (order.discountAmount || 0)) / 100)}
+                            {order.discountAmount && order.discountAmount > 0 && (
+                              <span className="text-xs text-muted-foreground ml-1 line-through">{formatPrice(order.amount / 100)}</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={statusColors[order.status] || ''}>{statusLabels[order.status] || order.status}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {order.promoCode ? (
+                              <Badge variant="secondary" className="text-xs">{order.promoCode}</Badge>
+                            ) : <span className="text-xs text-muted-foreground">-</span>}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {order.paidAt ? new Date(order.paidAt).toLocaleDateString() : '-'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="py-12 text-center text-muted-foreground">
+                    <CreditCard className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                    <p>No paid orders yet</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
       </main>
 
       {/* Admin Footer */}
@@ -2089,10 +2599,7 @@ export default function Home() {
               variant="ghost"
               size="sm"
               className="text-xs text-muted-foreground gap-1.5 hover:text-red-500"
-              onClick={() => {
-                setAdminLoggedIn(false);
-                setView('store');
-              }}
+              onClick={handleAdminLogout}
             >
               <LogOut className="h-3 w-3" />
               Logout
@@ -3050,6 +3557,57 @@ export default function Home() {
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>Includes: 3-year website operation + domain + lifetime ownership</span>
                   </div>
+                  <Separator />
+
+                  {/* Promo Code */}
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Tag className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          placeholder="Promo code"
+                          value={promoInput}
+                          onChange={(e) => { setPromoInput(e.target.value); setAppliedPromo(null); }}
+                          className="pl-8 h-9 text-sm"
+                          disabled={!!appliedPromo?.valid}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9"
+                        onClick={appliedPromo?.valid ? () => { setAppliedPromo(null); setPromoInput(''); } : handleValidatePromo}
+                        disabled={promoLoading || (!promoInput.trim() && !appliedPromo?.valid)}
+                      >
+                        {promoLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : appliedPromo?.valid ? <X className="h-3.5 w-3.5" /> : 'Apply'}
+                      </Button>
+                    </div>
+                    {appliedPromo && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg ${
+                          appliedPromo.valid
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                            : 'bg-red-500/10 text-red-500'
+                        }`}
+                      >
+                        {appliedPromo.valid ? (
+                          <>
+                            <CheckCircle2 className="h-3 w-3" />
+                            Code "{appliedPromo.code}" applied! -{formatPrice(appliedPromo.discount)}
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle className="h-3 w-3" />
+                            Invalid or expired promo code
+                          </>
+                        )}
+                      </motion.div>
+                    )}
+                  </div>
+
                   <Separator />
                   <div className="flex items-center justify-between font-bold text-emerald-600 dark:text-emerald-400">
                     <span>Total</span>

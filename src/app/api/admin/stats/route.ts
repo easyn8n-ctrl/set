@@ -1,9 +1,16 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { verifyAdminToken, extractBearerToken } from '@/lib/auth-utils';
 
-// GET /api/admin/stats - Dashboard statistics
-export async function GET() {
+// GET /api/admin/stats - Dashboard statistics (admin only)
+export async function GET(request: NextRequest) {
   try {
+    // Verify admin authentication
+    const token = extractBearerToken(request);
+    if (!token || !verifyAdminToken(token)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const [
       totalOrders,
       pendingOrders,

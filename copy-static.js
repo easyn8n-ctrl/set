@@ -1,6 +1,7 @@
 /**
  * Copy static files to standalone build directory
- * Windows-compatible alternative to: cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/
+ * For Vercel deployment, this script is NOT used.
+ * For local/Windows standalone builds only.
  */
 const fs = require('fs');
 const path = require('path');
@@ -31,32 +32,26 @@ console.log('Copying static files for standalone build...');
 const staticSrc = path.join(__dirname, '.next', 'static');
 const staticDest = path.join(__dirname, '.next', 'standalone', '.next', 'static');
 copyDirSync(staticSrc, staticDest);
-console.log('  ✓ .next/static → .next/standalone/.next/static');
+console.log('  .next/static -> .next/standalone/.next/static');
 
 // Copy public to .next/standalone/public
 const publicSrc = path.join(__dirname, 'public');
 const publicDest = path.join(__dirname, '.next', 'standalone', 'public');
 copyDirSync(publicSrc, publicDest);
-console.log('  ✓ public → .next/standalone/public');
+console.log('  public -> .next/standalone/public');
 
 // Copy prisma to .next/standalone/prisma (needed for runtime)
 const prismaSrc = path.join(__dirname, 'prisma');
 const prismaDest = path.join(__dirname, '.next', 'standalone', 'prisma');
 copyDirSync(prismaSrc, prismaDest);
-console.log('  ✓ prisma → .next/standalone/prisma');
-
-// Copy db to .next/standalone/db (SQLite database)
-const dbSrc = path.join(__dirname, 'db');
-const dbDest = path.join(__dirname, '.next', 'standalone', 'db');
-copyDirSync(dbSrc, dbDest);
-console.log('  ✓ db → .next/standalone/db');
+console.log('  prisma -> .next/standalone/prisma');
 
 // Copy .env to .next/standalone/.env
 const envSrc = path.join(__dirname, '.env');
 const envDest = path.join(__dirname, '.next', 'standalone', '.env');
 if (fs.existsSync(envSrc)) {
   fs.copyFileSync(envSrc, envDest);
-  console.log('  ✓ .env → .next/standalone/.env');
+  console.log('  .env -> .next/standalone/.env');
 }
 
 console.log('\nAll files copied successfully!');

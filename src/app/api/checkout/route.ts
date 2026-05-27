@@ -33,7 +33,9 @@ export async function POST(request: NextRequest) {
     });
 
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    const isStripeConfigured = stripeSecretKey && stripeSecretKey.startsWith('sk_live_') || stripeSecretKey?.startsWith('sk_test_') && stripeSecretKey !== 'sk_test_placeholder';
+    const isStripeConfigured = stripeSecretKey &&
+      (stripeSecretKey.startsWith('sk_live_') ||
+        (stripeSecretKey.startsWith('sk_test_') && stripeSecretKey !== 'sk_test_placeholder'));
 
     if (isStripeConfigured) {
       // Create Stripe checkout session
@@ -53,7 +55,7 @@ export async function POST(request: NextRequest) {
                   name: `${body.websiteType} - Professional Website Package`,
                   description: `Complete website for ${body.businessName} including 3 services, 3 years hosting, domain, SSL, and lifetime ownership. Delivery in 3 business days.`,
                 },
-                unit_amount: 70000,
+                unit_amount: body.amount || 70000,
               },
               quantity: 1,
             },

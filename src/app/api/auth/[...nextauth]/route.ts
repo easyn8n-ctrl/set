@@ -93,7 +93,7 @@ export const authOptions: NextAuthOptions = {
     signIn: '/',
     error: '/',
   },
-  secret: process.env.NEXTAUTH_SECRET || 'webcraft-secret-key-change-in-production',
+  secret: process.env.NEXTAUTH_SECRET,
   debug: false,
 };
 

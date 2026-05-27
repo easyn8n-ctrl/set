@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { createHash } from 'crypto';
 
@@ -7,8 +7,20 @@ function hashPassword(password: string): string {
 }
 
 // POST /api/admin/seed - Create default admin account
-export async function POST() {
+// Protected by ADMIN_SEED_KEY to prevent unauthorized access
+export async function POST(request: NextRequest) {
   try {
+    // Verify seed key for protection
+    const seedKey = request.headers.get('x-admin-seed-key') ||
+                    new URL(request.url).searchParams.get('key');
+
+    if (!seedKey || seedKey !== process.env.ADMIN_SEED_KEY) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid or missing seed key' },
+        { status: 403 }
+      );
+    }
+
     const existingAdmin = await db.admin.findUnique({
       where: { email: 'admin@webcraft.ca' },
     });

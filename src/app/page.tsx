@@ -434,12 +434,23 @@ export default function Home() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Chat drag state
-  const [chatPos, setChatPos] = useState({ x: 24, y: 600 });
+  const [chatPos, setChatPos] = useState({ x: 0, y: 600 });
   const [isDraggingChat, setIsDraggingChat] = useState(false);
   const dragOffsetRef = useRef({ x: 0, y: 0 });
-  const [chatPanelPos, setChatPanelPos] = useState({ x: 24, y: 200 });
+  const [chatPanelPos, setChatPanelPos] = useState({ x: 0, y: 200 });
   const [isDraggingPanel, setIsDraggingPanel] = useState(false);
   const panelDragOffsetRef = useRef({ x: 0, y: 0 });
+
+  // Initialize chat position to right side on mount
+  const chatInitRef = useRef(false);
+  useEffect(() => {
+    if (!chatInitRef.current) {
+      chatInitRef.current = true;
+      const rightOffset = 24;
+      setChatPos({ x: window.innerWidth - 56 - rightOffset, y: window.innerHeight - 100 });
+      setChatPanelPos({ x: window.innerWidth - 380 - rightOffset, y: window.innerHeight - 500 });
+    }
+  }, []);
 
   // Chat drag handlers
   const handleChatDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
@@ -471,7 +482,7 @@ export default function Home() {
       }
       if (isDraggingPanel) {
         setChatPanelPos({
-          x: Math.max(0, Math.min(window.innerWidth - 384, clientX - panelDragOffsetRef.current.x)),
+          x: Math.max(0, Math.min(window.innerWidth - 400, clientX - panelDragOffsetRef.current.x)),
           y: Math.max(0, Math.min(window.innerHeight - 100, clientY - panelDragOffsetRef.current.y)),
         });
       }

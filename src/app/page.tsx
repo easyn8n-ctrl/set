@@ -1148,6 +1148,32 @@ export default function Home() {
             </div>
           </motion.div>
 
+          {/* Navigation Links — Floating over image */}
+          <motion.nav
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.05 }}
+            className="mb-8"
+          >
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {[
+                { label: 'Home', href: '#hero', icon: HomeIcon },
+                { label: 'Packages', href: '#products', icon: ShoppingBag },
+                { label: 'Features', href: '#features', icon: Check },
+                { label: 'Domains', href: '#domain-search', icon: Globe },
+              ].map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-white/80 hover:text-white bg-white/5 backdrop-blur-md border border-white/10 hover:bg-white/15 hover:border-white/20 transition-all duration-300"
+                >
+                  <item.icon className="h-4 w-4 text-orange-400" />
+                  <span>{item.label}</span>
+                </a>
+              ))}
+            </div>
+          </motion.nav>
+
           {/* Headline */}
           <motion.h1
             className="text-4xl md:text-6xl lg:text-7xl font-bold text-white text-center leading-tight max-w-5xl mb-6"

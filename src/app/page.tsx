@@ -25,7 +25,8 @@ import {
   Utensils, Scissors, Home as HomeIcon, Building2, Car, GraduationCap,
   CheckCircle2, AlertCircle, MessageCircle, ArrowLeft,
   Lock, DollarSign, TrendingUp, Package, RefreshCw, CreditCard, Loader2, LogOut, ChevronLeft, ChevronRight,
-  Palette, Languages, MapPin, Download, Bot, UserCircle, Info, MessageSquare, EyeOff, UserPlus
+  Palette, Languages, MapPin, Download, Bot, UserCircle, Info, MessageSquare, EyeOff, UserPlus,
+  ImagePlus, Link2, Copy, Upload, Trash2, ZoomIn, Plus
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useSession, signIn, signOut } from 'next-auth/react';
@@ -394,6 +395,10 @@ export default function Home() {
   });
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedColor, setSelectedColor] = useState('Emerald');
+  const [expandedColor, setExpandedColor] = useState<string | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [imageLinks, setImageLinks] = useState<string[]>(['']);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewProduct, setPreviewProduct] = useState<typeof products[0] | null>(null);
 
@@ -2558,34 +2563,122 @@ export default function Home() {
                     <Palette className="h-3.5 w-3.5" />
                     Color Palette
                   </h4>
-                  <p className="text-xs text-muted-foreground">Choose the primary color scheme for your website</p>
+                  <p className="text-xs text-muted-foreground">Choose the primary color scheme for your website. Click to preview details.</p>
+
+                  {/* Color Squares Grid */}
                   <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
-                    {colorPalette.map((color) => (
-                      <button
-                        key={color.name}
-                        type="button"
-                        className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all ${
-                          selectedColor === color.name
-                            ? 'border-emerald-500 bg-emerald-500/5'
-                            : 'border-transparent hover:border-border'
-                        }`}
-                        onClick={() => setSelectedColor(color.name)}
-                      >
-                        <div className="relative">
+                    {colorPalette.map((color) => {
+                      const isExpanded = expandedColor === color.name;
+                      const isSelected = selectedColor === color.name;
+                      return (
+                        <motion.button
+                          key={color.name}
+                          type="button"
+                          layout
+                          className={`relative flex flex-col items-center rounded-xl transition-all overflow-hidden ${
+                            isSelected
+                              ? 'ring-2 ring-emerald-500 ring-offset-2 ring-offset-background'
+                              : 'hover:ring-1 hover:ring-border'
+                          }`}
+                          onClick={() => {
+                            setSelectedColor(color.name);
+                            setExpandedColor(isExpanded ? null : color.name);
+                          }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          {/* Main Color Square */}
                           <div
-                            className="w-8 h-8 rounded-full shadow-sm"
+                            className={`w-full aspect-square shadow-sm transition-all ${isExpanded ? 'rounded-t-xl' : 'rounded-xl'}`}
                             style={{ background: `linear-gradient(135deg, ${color.primary}, ${color.secondary})` }}
                           />
-                          {selectedColor === color.name && (
-                            <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
-                              <Check className="h-2.5 w-2.5 text-white" />
+
+                          {/* Selected Checkmark */}
+                          {isSelected && (
+                            <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-white/90 dark:bg-black/60 flex items-center justify-center shadow">
+                              <Check className="h-2.5 w-2.5 text-emerald-600" />
                             </div>
                           )}
-                        </div>
-                        <span className="text-[9px] text-muted-foreground text-center leading-tight truncate w-full">{color.name}</span>
-                      </button>
-                    ))}
+
+                          {/* Color Name Label */}
+                          <span className="text-[9px] text-muted-foreground text-center leading-tight pt-1 pb-0.5 w-full">{color.name}</span>
+
+                          {/* Expanded Detail Panel */}
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="w-full overflow-hidden bg-card border-t border-border rounded-b-xl"
+                              >
+                                <div className="p-2 space-y-1.5">
+                                  {/* Primary Color Swatch */}
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-4 h-4 rounded shadow-sm flex-shrink-0" style={{ backgroundColor: color.primary }} />
+                                    <span className="text-[8px] text-muted-foreground font-mono">{color.primary}</span>
+                                    <button
+                                      type="button"
+                                      className="ml-auto p-0.5 rounded hover:bg-muted/50"
+                                      onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(color.primary); }}
+                                    >
+                                      <Copy className="h-2.5 w-2.5 text-muted-foreground" />
+                                    </button>
+                                  </div>
+                                  {/* Secondary Color Swatch */}
+                                  <div className="flex items-center gap-1.5">
+                                    <div className="w-4 h-4 rounded shadow-sm flex-shrink-0" style={{ backgroundColor: color.secondary }} />
+                                    <span className="text-[8px] text-muted-foreground font-mono">{color.secondary}</span>
+                                    <button
+                                      type="button"
+                                      className="ml-auto p-0.5 rounded hover:bg-muted/50"
+                                      onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(color.secondary); }}
+                                    >
+                                      <Copy className="h-2.5 w-2.5 text-muted-foreground" />
+                                    </button>
+                                  </div>
+                                  {/* Gradient Preview Bar */}
+                                  <div
+                                    className="w-full h-2 rounded-full shadow-sm"
+                                    style={{ background: `linear-gradient(90deg, ${color.primary}, ${color.secondary})` }}
+                                  />
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </motion.button>
+                      );
+                    })}
                   </div>
+
+                  {/* Expanded Color Preview Bar (large view for selected color) */}
+                  {selectedColor && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-xl overflow-hidden border border-border shadow-sm"
+                    >
+                      {(() => {
+                        const sel = colorPalette.find(c => c.name === selectedColor);
+                        if (!sel) return null;
+                        return (
+                          <div className="flex h-10">
+                            <div className="flex-1" style={{ backgroundColor: sel.primary }} />
+                            <div className="flex-1" style={{ backgroundColor: sel.secondary }} />
+                          </div>
+                        );
+                      })()}
+                      <div className="px-3 py-1.5 bg-muted/30 flex items-center justify-between">
+                        <span className="text-xs font-medium">{selectedColor}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {(() => {
+                            const sel = colorPalette.find(c => c.name === selectedColor);
+                            return sel ? `${sel.primary} → ${sel.secondary}` : '';
+                          })()}
+                        </span>
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
 
                 <Separator />
@@ -2626,6 +2719,168 @@ export default function Home() {
                       />
                     </div>
                   </div>
+                </div>
+
+                <Separator />
+
+                {/* Logo Upload */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-1.5">
+                    <ImagePlus className="h-3.5 w-3.5" />
+                    Logo Upload
+                  </h4>
+                  <p className="text-xs text-muted-foreground">Upload your business logo to be used on your website</p>
+                  <div className="flex items-center gap-4">
+                    {/* Drop Zone */}
+                    <label
+                      className={`relative flex flex-col items-center justify-center w-32 h-32 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:border-emerald-500/50 hover:bg-emerald-500/5 ${
+                        logoPreview ? 'border-emerald-500/30' : 'border-border'
+                      }`}
+                    >
+                      {logoPreview ? (
+                        <img
+                          src={logoPreview}
+                          alt="Logo Preview"
+                          className="w-full h-full object-contain p-2 rounded-xl"
+                        />
+                      ) : (
+                        <>
+                          <Upload className="h-8 w-8 text-muted-foreground/50 mb-1" />
+                          <span className="text-[10px] text-muted-foreground text-center px-1">
+                            Click or drag to upload
+                          </span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setLogoFile(file);
+                            const reader = new FileReader();
+                            reader.onload = (ev) => setLogoPreview(ev.target?.result as string);
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                    {/* Preview Info & Remove */}
+                    <div className="flex-1 space-y-2">
+                      {logoPreview ? (
+                        <>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            <span className="text-sm font-medium">Logo uploaded</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {logoFile?.name} ({logoFile ? (logoFile.size / 1024).toFixed(1) : '0'} KB)
+                          </p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10"
+                            onClick={() => {
+                              setLogoPreview(null);
+                              setLogoFile(null);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-1" />
+                            Remove Logo
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground">
+                            Supported formats: PNG, JPG, SVG, WebP
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Recommended: 512x512px, transparent background
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Image Links */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-1.5">
+                    <Link2 className="h-3.5 w-3.5" />
+                    Image Links
+                  </h4>
+                  <p className="text-xs text-muted-foreground">Add URLs for images you want displayed on your website (gallery, products, portfolio, etc.)</p>
+                  <div className="space-y-2">
+                    {imageLinks.map((link, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <Link2 className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                          <Input
+                            placeholder="https://example.com/image.jpg"
+                            value={link}
+                            onChange={(e) => {
+                              const updated = [...imageLinks];
+                              updated[idx] = e.target.value;
+                              setImageLinks(updated);
+                            }}
+                            className="pl-8 text-sm"
+                          />
+                        </div>
+                        {imageLinks.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 text-muted-foreground hover:text-red-500"
+                            onClick={() => setImageLinks(imageLinks.filter((_, i) => i !== idx))}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full border-dashed text-muted-foreground hover:text-emerald-600 hover:border-emerald-500/50"
+                      onClick={() => setImageLinks([...imageLinks, ''])}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1" />
+                      Add Image Link
+                    </Button>
+                  </div>
+                  {/* Image Preview Thumbnails */}
+                  {imageLinks.some(l => l.trim()) && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {imageLinks.filter(l => l.trim()).map((link, idx) => (
+                        <div key={idx} className="relative group w-16 h-16 rounded-lg overflow-hidden border border-border shadow-sm">
+                          <img
+                            src={link}
+                            alt={`Image ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                              (e.target as HTMLImageElement).parentElement!.classList.add('bg-muted', 'flex', 'items-center', 'justify-center');
+                              (e.target as HTMLImageElement).parentElement!.innerHTML = '<span class="text-[8px] text-muted-foreground">Invalid</span>';
+                            }}
+                          />
+                          <a
+                            href={link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                          >
+                            <Download className="h-4 w-4 text-white" />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <Separator />

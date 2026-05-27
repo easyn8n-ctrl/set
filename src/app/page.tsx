@@ -1036,265 +1036,219 @@ export default function Home() {
   // ===================== STORE VIEW =====================
   const renderStore = () => (
     <>
-      {/* Top Banner */}
-      <AnimatePresence>
-        {showBanner && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="relative bg-gradient-to-r from-emerald-600 to-teal-500 text-white overflow-hidden"
-          >
-            <div className="container mx-auto px-4">
-              <div className="flex items-center justify-center py-2.5 gap-2 text-sm">
-                <Zap className="w-4 h-4 flex-shrink-0" />
-                <span className="font-medium">Limited Offer — Your Professional Website in Just 3 Days for {formatPrice(700)}</span>
-                <button
-                  onClick={() => setShowBanner(false)}
-                  className="absolute right-4 p-1 hover:bg-white/20 rounded-full transition-colors"
-                  aria-label="Close"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/50 border-b border-emerald-500/10 shadow-[0_1px_20px_rgba(5,150,105,0.06)]">
-        <div className="container mx-auto px-4">
-          <div className="flex h-16 items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                <Globe className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
-                WebCraft
-              </span>
-            </div>
-
-            <nav className="hidden md:flex items-center gap-1">
-              {[
-                { label: 'Home', href: '#hero', icon: HomeIcon },
-                { label: 'Packages', href: '#products', icon: ShoppingBag },
-                { label: 'Features', href: '#features', icon: Check },
-                { label: 'Domains', href: '#domain-search', icon: Globe },
-              ].map((item) => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-muted-foreground hover:text-foreground hover:bg-accent"
-                >
-                  <item.icon className="h-4 w-4" />
-                  <span>{item.label}</span>
-                </a>
-              ))}
-            </nav>
-
-            <div className="flex items-center gap-1.5">
-              {/* Currency Selector */}
-              <div className="relative">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs gap-1 h-8 px-2"
-                  onClick={() => setCurrencyOpen(!currencyOpen)}
-                >
-                  {currencyRates[userCurrency]?.symbol}{currencyRates[userCurrency]?.code}
-                </Button>
-                {currencyOpen && (
-                  <div className="absolute right-0 top-full mt-1 bg-card border border-border rounded-lg shadow-lg py-1 z-50 min-w-[120px]">
-                    {Object.entries(currencyRates).map(([code, { symbol }]) => (
-                      <button
-                        key={code}
-                        className={`w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors ${userCurrency === code ? 'text-emerald-600 font-medium' : ''}`}
-                        onClick={() => { setUserCurrency(code); setCurrencyOpen(false); }}
-                      >
-                        {symbol} {code}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* User / Sign In */}
-              {session?.user ? (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 transition-colors pl-1.5 pr-3 py-1">
-                      {session.user.image ? (
-                        <img src={session.user.image} alt="" className="w-7 h-7 rounded-full object-cover" />
-                      ) : (
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-xs font-bold text-white">
-                          {session.user.name?.charAt(0).toUpperCase() || 'U'}
-                        </div>
-                      )}
-                      <span className="hidden sm:inline text-xs font-medium text-emerald-700 dark:text-emerald-400 max-w-[80px] truncate">{session.user.name}</span>
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-56 p-0" align="end">
-                    <div className="p-3 border-b border-border">
-                      <p className="text-sm font-semibold">{session.user.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{session.user.email}</p>
-                    </div>
-                    <div className="p-1">
-                      <a
-                        href="#products"
-                        className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors"
-                      >
-                        <ShoppingBag className="h-4 w-4" />
-                        My Orders
-                      </a>
-                      <button
-                        onClick={handleSignOut}
-                        className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-red-600 dark:text-red-400 w-full"
-                      >
-                        <LogOut className="h-4 w-4" />
-                        Sign Out
-                      </button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 h-8 px-3 text-xs border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10"
-                  onClick={() => { setSignInOpen(true); setSignInStep('choose'); setAuthError(''); }}
-                  disabled={sessionStatus === 'loading'}
-                >
-                  <UserCircle className="h-4 w-4" />
-                  Sign In
-                </Button>
-              )}
-
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                className="rounded-full"
-              >
-                {mounted ? (theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />) : <Sun className="h-4 w-4" />}
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                className="md:hidden"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              >
-                <Menu className="h-5 w-5" />
-              </Button>
-            </div>
-          </div>
+      {/* Hero Section — Full-width image with icons overlay */}
+      <section id="hero" className="relative w-full min-h-[100vh] md:min-h-[90vh] overflow-hidden">
+        {/* Background Image */}
+        <div className="absolute inset-0">
+          <img
+            src="/hero-image.webp"
+            alt="Professional Web Design"
+            className="w-full h-full object-cover"
+          />
+          {/* Dark gradient overlay for text readability */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/70" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-transparent to-black/30" />
         </div>
 
-        <AnimatePresence>
-          {mobileMenuOpen && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="md:hidden border-t border-border overflow-hidden"
+        {/* Floating action buttons (top-right corner) */}
+        <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
+          {/* Currency Selector */}
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs gap-1 h-8 px-2 bg-black/30 backdrop-blur-md text-white/90 hover:bg-black/50 hover:text-white border border-white/10"
+              onClick={() => setCurrencyOpen(!currencyOpen)}
             >
-              <div className="container mx-auto px-4 py-3 space-y-1">
-                {[
-                  { label: 'Home', href: '#hero', icon: HomeIcon },
-                  { label: 'Packages', href: '#products', icon: ShoppingBag },
-                  { label: 'Features', href: '#features', icon: Check },
-                  { label: 'Domains', href: '#domain-search', icon: Globe },
-                ].map((item) => (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-muted-foreground hover:text-foreground hover:bg-accent"
+              {currencyRates[userCurrency]?.symbol}{currencyRates[userCurrency]?.code}
+            </Button>
+            {currencyOpen && (
+              <div className="absolute right-0 top-full mt-1 bg-black/90 backdrop-blur-md border border-white/10 rounded-lg shadow-lg py-1 z-50 min-w-[120px]">
+                {Object.entries(currencyRates).map(([code, { symbol }]) => (
+                  <button
+                    key={code}
+                    className={`w-full text-left px-3 py-1.5 text-sm hover:bg-white/10 transition-colors ${userCurrency === code ? 'text-orange-400 font-medium' : 'text-white/80'}`}
+                    onClick={() => { setUserCurrency(code); setCurrencyOpen(false); }}
                   >
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </a>
+                    {symbol} {code}
+                  </button>
                 ))}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </header>
-
-      {/* Hero Section */}
-      <section id="hero" className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-teal-500/5" />
-        <div className="container mx-auto px-4 py-16 md:py-24 relative">
-          <div className="max-w-3xl mx-auto text-center space-y-6">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="flex flex-wrap items-center justify-center gap-2 mb-4"
-            >
-              <Badge variant="secondary" className="text-sm px-4 py-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
-                <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                Trusted by 500+ North American Businesses
-              </Badge>
-              <Badge variant="secondary" className="text-sm px-4 py-1.5 bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20">
-                <Bot className="w-3.5 h-3.5 mr-1.5" />
-                AI-Powered
-              </Badge>
-            </motion.div>
-            <motion.h1
-              className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              Your Professional Website
-              <br />
-              <span className="bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
-                in Just 3 Days
-              </span>
-            </motion.h1>
-            <motion.p
-              className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-            >
-              Professional websites for local businesses across North America. Only {formatPrice(700)}.
-              3-year website operation + domain + lifetime ownership included.
-            </motion.p>
-            <motion.div
-              className="flex flex-col sm:flex-row items-center justify-center gap-3"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-            >
-              <a href="#products">
-                <Button size="lg" className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white gap-2 text-lg px-8 h-12">
-                  Browse Packages
-                  <ArrowRight className="h-5 w-5" />
-                </Button>
-              </a>
-            </motion.div>
-
-            <motion.div
-              className="grid grid-cols-3 gap-6 max-w-md mx-auto pt-8"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.4 }}
-            >
-              {[
-                { value: '500+', label: 'NA Businesses' },
-                { value: '3', label: 'Days Delivery' },
-                { value: formatPrice(700).replace(/ [A-Z]+$/, ''), label: userCurrency === 'CAD' ? 'CAD All-In' : `${userCurrency} All-In` },
-              ].map((stat) => (
-                <div key={stat.label} className="text-center">
-                  <div className="text-2xl md:text-3xl font-bold text-emerald-600 dark:text-emerald-400">{stat.value}</div>
-                  <div className="text-sm text-muted-foreground">{stat.label}</div>
-                </div>
-              ))}
-            </motion.div>
+            )}
           </div>
+
+          {/* Theme Toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="rounded-full bg-black/30 backdrop-blur-md text-white/90 hover:bg-black/50 hover:text-white border border-white/10"
+          >
+            {mounted ? (theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />) : <Sun className="h-4 w-4" />}
+          </Button>
+
+          {/* Sign In */}
+          {session?.user ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="flex items-center gap-2 rounded-full border border-white/20 bg-black/30 backdrop-blur-md hover:bg-black/50 transition-colors pl-1.5 pr-3 py-1">
+                  {session.user.image ? (
+                    <img src={session.user.image} alt="" className="w-7 h-7 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-xs font-bold text-white">
+                      {session.user.name?.charAt(0).toUpperCase() || 'U'}
+                    </div>
+                  )}
+                  <span className="hidden sm:inline text-xs font-medium text-white/90 max-w-[80px] truncate">{session.user.name}</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-0" align="end">
+                <div className="p-3 border-b border-border">
+                  <p className="text-sm font-semibold">{session.user.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{session.user.email}</p>
+                </div>
+                <div className="p-1">
+                  <a href="#products" className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors">
+                    <ShoppingBag className="h-4 w-4" /> My Orders
+                  </a>
+                  <button onClick={handleSignOut} className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors text-red-600 dark:text-red-400 w-full">
+                    <LogOut className="h-4 w-4" /> Sign Out
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-2 h-8 px-3 text-xs bg-black/30 backdrop-blur-md text-white/90 hover:bg-black/50 hover:text-white border border-white/10"
+              onClick={() => { setSignInOpen(true); setSignInStep('choose'); setAuthError(''); }}
+              disabled={sessionStatus === 'loading'}
+            >
+              <UserCircle className="h-4 w-4" />
+              Sign In
+            </Button>
+          )}
+        </div>
+
+        {/* Main Hero Content */}
+        <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4 pt-20 pb-16">
+          {/* Logo */}
+          <motion.div
+            initial={{ opacity: 0, y: -30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="mb-6"
+          >
+            <div className="flex items-center gap-3 bg-black/30 backdrop-blur-md rounded-2xl px-6 py-3 border border-white/10">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/30">
+                <Globe className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-2xl font-bold text-white tracking-tight">WebCraft</span>
+            </div>
+          </motion.div>
+
+          {/* Headline */}
+          <motion.h1
+            className="text-4xl md:text-6xl lg:text-7xl font-bold text-white text-center leading-tight max-w-5xl mb-6"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+          >
+            Your Professional Website
+            <br />
+            <span className="bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-300 bg-clip-text text-transparent">
+              in Just 3 Days
+            </span>
+          </motion.h1>
+
+          {/* Subtitle */}
+          <motion.p
+            className="text-lg md:text-xl text-white/80 max-w-2xl text-center mb-8"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+          >
+            Professional websites for local businesses across North America. Only {formatPrice(700)}.
+            3-year hosting + domain + lifetime ownership included.
+          </motion.p>
+
+          {/* CTA Button */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="mb-12"
+          >
+            <a href="#products">
+              <Button size="lg" className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white gap-2 text-lg px-10 h-13 rounded-full shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all duration-300">
+                Discover Packages
+                <ArrowRight className="h-5 w-5" />
+              </Button>
+            </a>
+          </motion.div>
+
+          {/* Feature Icons — Overlaid on image */}
+          <motion.div
+            className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl w-full"
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.4 }}
+          >
+            {[
+              { icon: Monitor, title: 'Professional Website', desc: 'Modern responsive design' },
+              { icon: Server, title: '3-Year Operation', desc: '99.9% uptime guaranteed' },
+              { icon: Globe, title: '.com Domain', desc: 'Free SSL included' },
+              { icon: Clock, title: '3-Day Delivery', desc: 'Fast turnaround' },
+            ].map((feature, index) => (
+              <motion.div
+                key={feature.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.5 + index * 0.1 }}
+                className="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/10 hover:bg-white/20 hover:border-white/20 transition-all duration-300 group cursor-pointer"
+              >
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 flex items-center justify-center mb-3 group-hover:from-orange-500/30 group-hover:to-amber-500/30 transition-colors">
+                  <feature.icon className="h-6 w-6 text-orange-400" />
+                </div>
+                <h3 className="text-white font-semibold text-sm mb-1">{feature.title}</h3>
+                <p className="text-white/60 text-xs">{feature.desc}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* Bottom Stats */}
+          <motion.div
+            className="flex flex-wrap items-center justify-center gap-8 mt-12"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.6, delay: 0.9 }}
+          >
+            {[
+              { value: '500+', label: 'NA Businesses' },
+              { value: '3', label: 'Days Delivery' },
+              { value: formatPrice(700).replace(/ [A-Z]+$/, ''), label: userCurrency === 'CAD' ? 'CAD All-In' : `${userCurrency} All-In` },
+              { value: '100%', label: 'Ownership' },
+            ].map((stat) => (
+              <div key={stat.label} className="text-center">
+                <div className="text-2xl md:text-3xl font-bold text-white">{stat.value}</div>
+                <div className="text-sm text-white/60">{stat.label}</div>
+              </div>
+            ))}
+          </motion.div>
+
+          {/* Scroll indicator */}
+          <motion.div
+            className="absolute bottom-8 left-1/2 -translate-x-1/2"
+            animate={{ y: [0, 8, 0] }}
+            transition={{ duration: 2, repeat: Infinity }}
+          >
+            <a href="#products" className="text-white/40 hover:text-white/80 transition-colors">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+            </a>
+          </motion.div>
         </div>
       </section>
 

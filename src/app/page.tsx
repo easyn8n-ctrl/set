@@ -433,6 +433,65 @@ export default function Home() {
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Chat drag state
+  const [chatPos, setChatPos] = useState({ x: 24, y: 600 });
+  const [isDraggingChat, setIsDraggingChat] = useState(false);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const [chatPanelPos, setChatPanelPos] = useState({ x: 24, y: 200 });
+  const [isDraggingPanel, setIsDraggingPanel] = useState(false);
+  const panelDragOffsetRef = useRef({ x: 0, y: 0 });
+
+  // Chat drag handlers
+  const handleChatDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    dragOffsetRef.current = { x: clientX - chatPos.x, y: clientY - chatPos.y };
+    setIsDraggingChat(true);
+  }, [chatPos]);
+
+  const handlePanelDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    panelDragOffsetRef.current = { x: clientX - chatPanelPos.x, y: clientY - chatPanelPos.y };
+    setIsDraggingPanel(true);
+  }, [chatPanelPos]);
+
+  useEffect(() => {
+    if (!isDraggingChat && !isDraggingPanel) return;
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      if (isDraggingChat) {
+        setChatPos({
+          x: Math.max(0, Math.min(window.innerWidth - 56, clientX - dragOffsetRef.current.x)),
+          y: Math.max(0, Math.min(window.innerHeight - 56, clientY - dragOffsetRef.current.y)),
+        });
+      }
+      if (isDraggingPanel) {
+        setChatPanelPos({
+          x: Math.max(0, Math.min(window.innerWidth - 384, clientX - panelDragOffsetRef.current.x)),
+          y: Math.max(0, Math.min(window.innerHeight - 100, clientY - panelDragOffsetRef.current.y)),
+        });
+      }
+    };
+    const handleUp = () => {
+      setIsDraggingChat(false);
+      setIsDraggingPanel(false);
+    };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    window.addEventListener('touchmove', handleMove);
+    window.addEventListener('touchend', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleUp);
+    };
+  }, [isDraggingChat, isDraggingPanel]);
+
   // Auth state - using NextAuth
   const { data: session, status: sessionStatus } = useSession();
   const [signInOpen, setSignInOpen] = useState(false);
@@ -2037,87 +2096,147 @@ export default function Home() {
     <div className="min-h-screen flex flex-col bg-background">
       {view === 'store' ? renderStore() : renderAdmin()}
 
-      {/* AI Chatbot Floating Button */}
+      {/* AI Chatbot - Draggable Floating Button & Panel */}
       {view === 'store' && (
-        <motion.div
-          className="fixed bottom-6 right-6 z-50"
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 1 }}
-        >
-          <button
-            onClick={() => setChatOpen(!chatOpen)}
-            className="relative w-14 h-14 rounded-full bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-lg shadow-violet-500/25 flex items-center justify-center transition-all hover:scale-105"
-            aria-label="AI Chat"
-          >
-            <div className="absolute inset-0 rounded-full animate-ping bg-violet-400/20" />
-            <MessageSquare className="h-6 w-6 relative z-10" />
-            <span className="absolute -top-1 -right-1 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full z-10">AI</span>
-          </button>
-        </motion.div>
-      )}
-
-      {/* AI Chatbot Dialog */}
-      <Dialog open={chatOpen} onOpenChange={setChatOpen}>
-        <DialogContent className="max-w-md max-h-[600px] flex flex-col p-0">
-          <DialogHeader className="p-4 pb-2 border-b border-border">
-            <DialogTitle className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-600 to-purple-600 flex items-center justify-center">
-                <Bot className="h-4 w-4 text-white" />
-              </div>
-              WebCraft AI Assistant
-              <Badge className="bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20 text-xs">AI</Badge>
-            </DialogTitle>
-            <DialogDescription>Ask anything about our website services</DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[300px] max-h-[400px]">
-            {chatMessages.length === 0 && (
-              <div className="text-center text-muted-foreground text-sm py-8 space-y-2">
-                <Bot className="h-10 w-10 mx-auto text-violet-500/40" />
-                <p>Hi! I&apos;m the WebCraft AI assistant.</p>
-                <p>Ask me about our services, pricing, or delivery timeline!</p>
-              </div>
-            )}
-            {chatMessages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
-                  msg.role === 'user'
-                    ? 'bg-gradient-to-br from-emerald-600 to-teal-500 text-white rounded-br-md'
-                    : 'bg-muted border border-border rounded-bl-md'
-                }`}>
-                  {msg.content}
-                </div>
-              </div>
-            ))}
-            {chatLoading && (
-              <div className="flex justify-start">
-                <div className="bg-muted border border-border rounded-2xl rounded-bl-md px-4 py-2.5">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-          <div className="p-4 pt-2 border-t border-border">
-            <div className="flex gap-2">
-              <Input
-                placeholder="Ask me anything..."
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-                className="flex-1"
-              />
-              <Button
-                onClick={handleSendChat}
-                disabled={!chatInput.trim() || chatLoading}
-                className="bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white"
+        <>
+          {/* Floating Toggle Button - Draggable */}
+          {!chatOpen && (
+            <motion.div
+              className="fixed z-50 cursor-grab active:cursor-grabbing touch-none select-none"
+              style={{ left: chatPos.x, top: chatPos.y }}
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 1 }}
+              onMouseDown={handleChatDragStart}
+              onTouchStart={handleChatDragStart}
+            >
+              <button
+                onClick={(e) => { if (!isDraggingChat) setChatOpen(true); }}
+                className="relative w-14 h-14 rounded-full bg-gradient-to-br from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white shadow-lg shadow-emerald-500/25 flex items-center justify-center transition-all hover:scale-105"
+                aria-label="AI Chat"
               >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+                <div className="absolute inset-0 rounded-full animate-ping bg-emerald-400/20" />
+                <MessageSquare className="h-6 w-6 relative z-10" />
+                <span className="absolute -top-1 -right-1 bg-teal-400 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full z-10">AI</span>
+              </button>
+            </motion.div>
+          )}
+
+          {/* Chat Panel - Draggable */}
+          <AnimatePresence>
+            {chatOpen && (
+              <motion.div
+                className="fixed z-50 w-[380px] max-w-[calc(100vw-24px)] rounded-2xl overflow-hidden shadow-2xl shadow-emerald-900/20 border border-emerald-500/20"
+                style={{ left: chatPanelPos.x, top: chatPanelPos.y }}
+                initial={{ scale: 0.8, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.8, opacity: 0, y: 20 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              >
+                {/* Drag Handle + Header */}
+                <div
+                  className="bg-gradient-to-br from-emerald-600 via-teal-500 to-emerald-700 px-4 pt-3 pb-3 cursor-grab active:cursor-grabbing touch-none select-none relative"
+                  onMouseDown={handlePanelDragStart}
+                  onTouchStart={handlePanelDragStart}
+                >
+                  {/* Drag indicator dots */}
+                  <div className="flex justify-center mb-2">
+                    <div className="flex gap-1">
+                      <div className="w-1 h-1 rounded-full bg-white/40" />
+                      <div className="w-1 h-1 rounded-full bg-white/40" />
+                      <div className="w-1 h-1 rounded-full bg-white/40" />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow">
+                        <Bot className="h-4 w-4 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-white leading-tight">WebCraft AI</h3>
+                        <p className="text-[10px] text-white/70">Ask anything about our services</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] font-bold bg-white/20 text-white px-2 py-0.5 rounded-full backdrop-blur-sm">Online</span>
+                      <button
+                        onClick={() => setChatOpen(false)}
+                        className="w-7 h-7 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors"
+                      >
+                        <X className="h-3.5 w-3.5 text-white" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Messages Area */}
+                <div className="bg-background max-h-[350px] min-h-[250px] overflow-y-auto p-4 space-y-3">
+                  {chatMessages.length === 0 && (
+                    <div className="text-center text-muted-foreground text-sm py-8 space-y-2">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-3">
+                        <Bot className="h-6 w-6 text-emerald-500/60" />
+                      </div>
+                      <p className="font-medium text-foreground/80">Hi! I&apos;m the WebCraft AI assistant</p>
+                      <p className="text-xs">Ask me about our services, pricing, or delivery timeline!</p>
+                    </div>
+                  )}
+                  {chatMessages.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      {msg.role === 'assistant' && (
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-600 to-teal-500 flex items-center justify-center mr-2 flex-shrink-0 mt-1">
+                          <Bot className="h-3 w-3 text-white" />
+                        </div>
+                      )}
+                      <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm ${
+                        msg.role === 'user'
+                          ? 'bg-gradient-to-br from-emerald-600 to-teal-500 text-white rounded-br-md'
+                          : 'bg-muted border border-border rounded-bl-md'
+                      }`}>
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                  {chatLoading && (
+                    <div className="flex justify-start">
+                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-600 to-teal-500 flex items-center justify-center mr-2 flex-shrink-0 mt-1">
+                        <Bot className="h-3 w-3 text-white" />
+                      </div>
+                      <div className="bg-muted border border-border rounded-2xl rounded-bl-md px-4 py-2.5">
+                        <div className="flex gap-1">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500/50 animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <div className="w-2 h-2 rounded-full bg-emerald-500/50 animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <div className="w-2 h-2 rounded-full bg-emerald-500/50 animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                {/* Input Area */}
+                <div className="bg-background border-t border-border p-3">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Ask me anything..."
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+                      className="flex-1 rounded-xl border-emerald-500/20 focus:border-emerald-500/50 h-10 text-sm"
+                    />
+                    <button
+                      onClick={handleSendChat}
+                      disabled={!chatInput.trim() || chatLoading}
+                      className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed text-white flex items-center justify-center transition-all shadow-md shadow-emerald-500/20"
+                    >
+                      <Send className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </>
+      )}
 
       {/* Sign-In Dialog */}
       <Dialog open={signInOpen} onOpenChange={(open) => { setSignInOpen(open); if (!open) { setAuthError(''); setSignInEmail(''); setSignInPassword(''); setSignInName(''); } }}>

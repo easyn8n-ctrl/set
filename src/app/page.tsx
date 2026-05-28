@@ -235,6 +235,139 @@ const colorPalette = [
   { name: 'Amber', primary: '#d97706', secondary: '#fcd34d' },
 ];
 
+// Pricing Plans
+interface PricingPlan {
+  id: 'starter' | 'business' | 'premium';
+  name: string;
+  subtitle: string;
+  price: number; // CAD
+  originalPrice?: number;
+  pages: string;
+  includedFeatures: number;
+  extraFeaturePrice: number;
+  revisions: string;
+  delivery: string;
+  warranty: string;
+  popular: boolean;
+  badge: string;
+  badgeColor: string;
+  includedList: string[];
+  highlights: string[];
+  icon: string;
+}
+
+const pricingPlans: PricingPlan[] = [
+  {
+    id: 'starter',
+    name: 'Starter',
+    subtitle: 'Essential Launch',
+    price: 499,
+    pages: '1 Page',
+    includedFeatures: 3,
+    extraFeaturePrice: 30,
+    revisions: '1 Round',
+    delivery: '5 Business Days',
+    warranty: '3 Months',
+    popular: false,
+    badge: 'Starter',
+    badgeColor: 'bg-slate-500/10 text-slate-500 border-slate-500/20',
+    includedList: [
+      'Professional 1-page website',
+      '3 website features included',
+      '.com domain (1 year included)',
+      '3-year website hosting & operation',
+      'SSL certificate & security',
+      'Mobile responsive design',
+      '1 revision round',
+      '5 business day delivery',
+      '3-month technical warranty',
+      'Lifetime website ownership',
+    ],
+    highlights: [
+      'Perfect for simple business presence',
+      'Great for getting started online quickly',
+    ],
+    icon: 'rocket',
+  },
+  {
+    id: 'business',
+    name: 'Business',
+    subtitle: 'Professional Growth',
+    price: 899,
+    originalPrice: 1099,
+    pages: 'Up to 5 Pages',
+    includedFeatures: 6,
+    extraFeaturePrice: 30,
+    revisions: '3 Rounds',
+    delivery: '3 Business Days',
+    warranty: '6 Months',
+    popular: true,
+    badge: 'Most Popular',
+    badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+    includedList: [
+      'Professional multi-page website (up to 5 pages)',
+      '6 website features included',
+      '.com domain (3 years included)',
+      '3-year website hosting & operation',
+      'SSL certificate & security',
+      'Mobile responsive design',
+      '3 revision rounds',
+      '3 business day delivery (priority)',
+      '6-month technical warranty',
+      'Lifetime website ownership',
+      'Google Maps integration',
+      'Contact form & lead capture',
+      'Basic SEO optimization',
+      'Social media links integration',
+    ],
+    highlights: [
+      'Best value for growing businesses',
+      'Includes SEO & Google Maps setup',
+    ],
+    icon: 'trending-up',
+  },
+  {
+    id: 'premium',
+    name: 'Premium',
+    subtitle: 'Enterprise Solution',
+    price: 1499,
+    originalPrice: 1999,
+    pages: 'Up to 10 Pages',
+    includedFeatures: 10,
+    extraFeaturePrice: 0,
+    revisions: 'Unlimited',
+    delivery: '2 Business Days',
+    warranty: '12 Months',
+    popular: false,
+    badge: 'Premium',
+    badgeColor: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+    includedList: [
+      'Full multi-page website (up to 10 pages)',
+      'All 10 website features included',
+      '.com domain (3 years included)',
+      '3-year website hosting & operation',
+      'SSL certificate & security',
+      'Mobile responsive design',
+      'Unlimited revisions',
+      '2 business day express delivery',
+      '12-month technical warranty',
+      'Lifetime website ownership',
+      'Google Maps integration',
+      'Advanced SEO optimization',
+      'Google Analytics setup',
+      'Social media integration',
+      'Custom email setup (info@yourbusiness.com)',
+      'Logo design included',
+      'Priority 24/7 support',
+    ],
+    highlights: [
+      'Complete enterprise-grade solution',
+      'Maximum features & longest warranty',
+    ],
+    icon: 'crown',
+  },
+];
+
 const categories = [
   { id: 'all', label: 'All', icon: Globe },
   { id: 'Healthcare', label: 'Healthcare', icon: Stethoscope },
@@ -420,6 +553,7 @@ export default function Home() {
   const [imageLinks, setImageLinks] = useState<string[]>(['']);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewProduct, setPreviewProduct] = useState<typeof products[0] | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<PricingPlan>(pricingPlans[1]); // Default to Business
 
   // Admin & Payment state
   const [view, setView] = useState<'store' | 'admin'>('store');
@@ -784,6 +918,7 @@ export default function Home() {
   const handleOrderClick = (product: typeof products[0]) => {
     setSelectedProduct(product);
     setPaymentStep('form');
+    setSelectedPlan(pricingPlans[1]);
     const productServices = allServices[product.id] || product.services;
     setFormData({
       ...formData,
@@ -801,11 +936,14 @@ export default function Home() {
   };
 
   const calculatePrice = () => {
-    const extraServices = Math.max(0, selectedServices.length - 3);
-    const extraCost = extraServices * 30;
-    const baseTotal = 700 + extraCost;
+    const plan = selectedPlan;
+    const planPrice = plan.price;
+    const maxIncluded = plan.includedFeatures;
+    const extraServices = Math.max(0, selectedServices.length - maxIncluded);
+    const extraCost = extraServices * plan.extraFeaturePrice;
+    const baseTotal = planPrice + extraCost;
     const discount = appliedPromo?.valid ? appliedPromo.discount : 0;
-    return { basePrice: 700, extraServices, extraCost, discount, totalPrice: Math.max(0, baseTotal - discount) };
+    return { basePrice: planPrice, maxIncluded, extraServices, extraCost, discount, totalPrice: Math.max(0, baseTotal - discount) };
   };
 
   // Restore admin session from localStorage
@@ -1285,9 +1423,11 @@ export default function Home() {
       doc.text('Payment Summary', 20, y);
       y += 10;
       doc.setFontSize(10);
-      const amount = (order.amount || 70000) / 100;
-      const basePrice = 700;
-      const extraCount = Math.max(0, orderServices.length - 3);
+      const amount = (order.amount || 49900) / 100;
+      // Dynamic base price based on plan
+      const planPrice = order.amount ? Math.min(order.amount, 149900) : 89900;
+      const basePrice = planPrice / 100;
+      const extraCount = Math.max(0, orderServices.length - 6);
       const extraCost = extraCount * 30;
       doc.setTextColor(80, 80, 80);
       doc.text('Base Package (3 features):', 25, y);
@@ -1465,6 +1605,7 @@ export default function Home() {
               {[
                 { label: 'Home', href: '#hero', icon: HomeIcon },
                 { label: 'Packages', href: '#products', icon: ShoppingBag },
+                { label: 'Pricing', href: '#pricing', icon: CreditCard },
                 { label: 'Features', href: '#features', icon: Check },
                 { label: 'Domains', href: '#domain-search', icon: Globe },
               ].map((item) => (
@@ -1501,7 +1642,7 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
-            Professional websites for local businesses across North America. Only {formatPrice(700)}.
+            Professional websites for local businesses across North America. Plans starting at {formatPrice(499)}.
             3-year hosting + domain + lifetime ownership included.
           </motion.p>
 
@@ -1559,7 +1700,7 @@ export default function Home() {
             {[
               { value: '500+', label: 'NA Businesses' },
               { value: '3', label: 'Days Delivery' },
-              { value: formatPrice(700).replace(/ [A-Z]+$/, ''), label: userCurrency === 'CAD' ? 'CAD All-In' : `${userCurrency} All-In` },
+              { value: formatPrice(499).replace(/ [A-Z]+$/, ''), label: `Starting from ${userCurrency}` },
               { value: '100%', label: 'Ownership' },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
@@ -1697,8 +1838,8 @@ export default function Home() {
                   <CardFooter className="p-5 pt-0">
                     <div className="w-full space-y-3">
                       <div className="flex items-center justify-between">
-                        <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatPrice(700)}</div>
-                        <div className="text-xs text-muted-foreground">All-inclusive</div>
+                        <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatPrice(499)}</div>
+                        <div className="text-xs text-muted-foreground">Starting from</div>
                       </div>
                       <div className="flex gap-2">
                         <Button
@@ -1881,7 +2022,7 @@ export default function Home() {
                 Ready to Get Your Website?
               </h2>
               <p className="text-lg text-white/80">
-                Don&apos;t let customers search for you on Google and not find you. Thousands of local businesses across North America lose customers every day because they have no online presence. Get your professional website in just 3 days.
+                Don&apos;t let customers search for you on Google and not find you. Thousands of local businesses across North America lose customers every day because they have no online presence. Choose a plan that fits your business and get launched in as fast as 2 days.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                 <a href="#products">
@@ -1910,58 +2051,154 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Pricing Details */}
-      <section className="py-16 md:py-24 bg-muted/30">
+      {/* Pricing Plans */}
+      <section id="pricing" className="py-16 md:py-24 bg-muted/30">
         <div className="container mx-auto px-4">
           <div className="text-center space-y-4 mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold">Package Details</h2>
+            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+              <Crown className="w-3.5 h-3.5 mr-1" />
+              Done-For-You Digital Launch Service
+            </Badge>
+            <h2 className="text-3xl md:text-4xl font-bold">Choose Your Launch Plan</h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-              Everything you need in one clear, transparent package — no hidden fees
+              One-time payment. No monthly subscriptions. No hidden fees. Your website, fully built and launched — ready for customers.
             </p>
           </div>
-          <div className="max-w-3xl mx-auto">
-            <Card className="border-emerald-500/30">
-              <CardContent className="p-8 space-y-8">
-                <div className="text-center space-y-2">
-                  <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 mb-2">
-                    <Crown className="w-3.5 h-3.5 mr-1" />
-                    All-Inclusive Package
-                  </Badge>
-                  <div className="text-5xl font-bold text-emerald-600 dark:text-emerald-400">{formatPrice(700)}</div>
-                  <p className="text-muted-foreground">One-time payment — no monthly subscription, no hidden fees</p>
-                </div>
-                <Separator />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {[
-                    'Professional Website',
-                    '3 Services Showcased',
-                    '3-Year Website Operation',
-                    '.com or .net Domain',
-                    'Google Maps Integration',
-                    'SSL Certificate',
-                    'Lifetime Ownership',
-                    '3-Day Delivery',
-                    'Mobile-First Design',
-                    'Local SEO (Google Business)',
-                    'Easy Admin Panel',
-                    '30-Day Support',
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center gap-2.5">
-                      <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
-                      <span className="text-sm">{item}</span>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+            {pricingPlans.map((plan, index) => (
+              <motion.div
+                key={plan.id}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: index * 0.1 }}
+              >
+                <Card className={`relative h-full flex flex-col overflow-hidden transition-all duration-300 hover:-translate-y-1 ${
+                  plan.popular
+                    ? 'border-emerald-500/50 shadow-lg shadow-emerald-500/10 scale-[1.02] md:scale-105'
+                    : 'border-border/50 hover:border-emerald-500/30 hover:shadow-md'
+                }`}>
+                  {/* Popular Ribbon */}
+                  {plan.popular && (
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500" />
+                  )}
+
+                  <CardHeader className="pb-4 text-center">
+                    {plan.popular && (
+                      <Badge className="bg-emerald-500 text-white border-0 mb-2 gap-1">
+                        <Star className="h-3 w-3 fill-current" />
+                        {plan.badge}
+                      </Badge>
+                    )}
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center mx-auto mb-3">
+                      {plan.icon === 'crown' ? (
+                        <Crown className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                      ) : plan.icon === 'trending-up' ? (
+                        <TrendingUp className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                      ) : (
+                        <Zap className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                      )}
                     </div>
-                  ))}
-                </div>
-                <div className="text-center pt-4">
-                  <a href="#products">
-                    <Button size="lg" className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white gap-2 text-lg px-10 h-12">
-                      <Zap className="h-5 w-5" />
-                      Get Started Now
-                    </Button>
-                  </a>
-                </div>
-              </CardContent>
-            </Card>
+                    <CardTitle className="text-xl">{plan.name}</CardTitle>
+                    <p className="text-sm text-muted-foreground">{plan.subtitle}</p>
+                    <div className="pt-3">
+                      <div className="flex items-baseline justify-center gap-1">
+                        <span className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">{formatPrice(plan.price)}</span>
+                      </div>
+                      {plan.originalPrice && (
+                        <p className="text-sm text-muted-foreground line-through mt-1">{formatPrice(plan.originalPrice)}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">One-time payment</p>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="flex-1 space-y-4">
+                    {/* Quick Stats */}
+                    <div className="flex items-center justify-center gap-3 text-xs">
+                      <span className="flex items-center gap-1 bg-muted/50 px-2 py-1 rounded-full">
+                        <Monitor className="h-3 w-3 text-muted-foreground" />
+                        {plan.pages}
+                      </span>
+                      <span className="flex items-center gap-1 bg-muted/50 px-2 py-1 rounded-full">
+                        <Clock className="h-3 w-3 text-muted-foreground" />
+                        {plan.delivery}
+                      </span>
+                      <span className="flex items-center gap-1 bg-muted/50 px-2 py-1 rounded-full">
+                        <Shield className="h-3 w-3 text-muted-foreground" />
+                        {plan.warranty}
+                      </span>
+                    </div>
+
+                    <Separator />
+
+                    {/* Included Features */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">What&apos;s Included</p>
+                      <div className="space-y-2">
+                        {plan.includedList.map((item, i) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <Check className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                            <span className="text-sm">{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <Separator />
+
+                    {/* Highlights */}
+                    <div className="space-y-1.5">
+                      {plan.highlights.map((h, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Sparkles className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                          <span>{h}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+
+                  <CardFooter className="p-5 pt-0">
+                    <a href="#products" className="w-full">
+                      <Button
+                        className={`w-full gap-2 h-11 text-sm font-medium ${
+                          plan.popular
+                            ? 'bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white shadow-md shadow-emerald-500/20'
+                            : 'bg-background border-2 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
+                        }`}
+                      >
+                        {plan.popular ? (
+                          <>
+                            <Zap className="h-4 w-4" />
+                            Get Started
+                          </>
+                        ) : (
+                          <>
+                            <ArrowRight className="h-4 w-4" />
+                            Choose Plan
+                          </>
+                        )}
+                      </Button>
+                    </a>
+                  </CardFooter>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Trust Badges */}
+          <div className="flex flex-wrap items-center justify-center gap-6 mt-12 text-sm text-muted-foreground">
+            {[
+              { icon: Shield, text: 'Secure Payment' },
+              { icon: CheckCircle2, text: 'No Hidden Fees' },
+              { icon: Clock, text: 'Fast Delivery' },
+              { icon: Heart, text: 'Satisfaction Guaranteed' },
+            ].map(({ icon: Icon, text }) => (
+              <div key={text} className="flex items-center gap-1.5">
+                <Icon className="h-4 w-4 text-emerald-500" />
+                <span>{text}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
@@ -2416,7 +2653,7 @@ export default function Home() {
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-border">
                       <div>
-                        <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">$700</span>
+                        <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">$499+</span>
                         <span className="text-xs text-muted-foreground ml-1">CAD</span>
                       </div>
                       <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs">
@@ -3066,6 +3303,48 @@ export default function Home() {
               </DialogHeader>
 
               <div className="space-y-4 py-4">
+                {/* Plan Selection */}
+                <div className="space-y-3">
+                  <h4 className="font-medium text-sm flex items-center gap-1.5">
+                    <Crown className="h-4 w-4 text-emerald-500" />
+                    Select Your Plan
+                  </h4>
+                  <p className="text-xs text-muted-foreground">Choose the plan that best fits your business needs</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {pricingPlans.map((plan) => (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedPlan(plan);
+                          // Auto-adjust services to plan limit
+                          if (selectedProduct) {
+                            const planServices = allServices[selectedProduct.id] || selectedProduct.services;
+                            setSelectedServices(planServices.slice(0, Math.min(plan.includedFeatures, planServices.length)));
+                          }
+                        }}
+                        className={`relative rounded-xl border p-3 text-center transition-all ${
+                          selectedPlan.id === plan.id
+                            ? 'border-emerald-500 bg-emerald-500/10 ring-2 ring-emerald-500/20'
+                            : 'border-border hover:border-emerald-500/30 hover:bg-muted/50'
+                        }`}
+                      >
+                        {plan.popular && (
+                          <div className="absolute -top-2 left-1/2 -translate-x-1/2">
+                            <Badge className="bg-emerald-500 text-white text-[8px] px-1.5 py-0 border-0">Popular</Badge>
+                          </div>
+                        )}
+                        <p className="font-semibold text-xs">{plan.name}</p>
+                        <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400 mt-1">{formatPrice(plan.price)}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">{plan.pages}</p>
+                        <p className="text-[10px] text-muted-foreground">{plan.includedFeatures} features included</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <Separator />
+
                 {/* Business Info */}
                 <div className="space-y-3">
                   <h4 className="font-medium text-sm text-muted-foreground">Business Information</h4>
@@ -3143,21 +3422,21 @@ export default function Home() {
                   <div className="flex items-center justify-between">
                     <h4 className="font-medium text-sm text-muted-foreground">Select Website Features</h4>
                     <span className="text-xs text-muted-foreground">
-                      {Math.min(selectedServices.length, 3)}/3 included
-                      {selectedServices.length > 3 && (
+                      {Math.min(selectedServices.length, selectedPlan.includedFeatures)}/{selectedPlan.includedFeatures} included
+                      {selectedServices.length > selectedPlan.includedFeatures && selectedPlan.extraFeaturePrice > 0 && (
                         <span className="text-amber-600 dark:text-amber-400 ml-1">
-                          (+{selectedServices.length - 3} extra = +{formatPrice((selectedServices.length - 3) * 30)})
+                          (+{selectedServices.length - selectedPlan.includedFeatures} extra = +{formatPrice((selectedServices.length - selectedPlan.includedFeatures) * selectedPlan.extraFeaturePrice)})
                         </span>
                       )}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Choose the website features you need. The first 3 are included in the {formatPrice(700)} price. Each additional feature adds {formatPrice(30)}.</p>
+                  <p className="text-xs text-muted-foreground">Choose the website features you need. The first {selectedPlan.includedFeatures} are included in the {selectedPlan.name} plan. {selectedPlan.extraFeaturePrice > 0 ? `Each additional feature adds ${formatPrice(selectedPlan.extraFeaturePrice)}.` : 'All features are included!'}</p>
                   <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto pr-1">
                     {(selectedProduct ? (allServices[selectedProduct.id] || selectedProduct.services) : []).map((service) => {
                       const isSelected = selectedServices.includes(service);
                       const serviceIndex = isSelected ? selectedServices.indexOf(service) : -1;
-                      const isIncluded = serviceIndex >= 0 && serviceIndex < 3;
-                      const isExtra = serviceIndex >= 3;
+                      const isIncluded = serviceIndex >= 0 && serviceIndex < selectedPlan.includedFeatures;
+                      const isExtra = serviceIndex >= selectedPlan.includedFeatures;
                       return (
                         <label
                           key={service}
@@ -3184,7 +3463,7 @@ export default function Home() {
                             <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium px-2 py-0.5 rounded-full bg-emerald-500/10">Included</span>
                           )}
                           {isExtra && (
-                            <span className="text-xs text-amber-600 dark:text-amber-400 font-medium px-2 py-0.5 rounded-full bg-amber-500/10">+{formatPrice(30).replace(/ [A-Z]+$/, '')}</span>
+                            <span className="text-xs text-amber-600 dark:text-amber-400 font-medium px-2 py-0.5 rounded-full bg-amber-500/10">+{formatPrice(selectedPlan.extraFeaturePrice).replace(/ [A-Z]+$/, '')}</span>
                           )}
                         </label>
                       );
@@ -3543,8 +3822,11 @@ export default function Home() {
                 {/* Price Summary */}
                 <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm">Base Package (3 features)</span>
-                    <span className="font-medium">{formatPrice(700)}</span>
+                    <span className="text-sm flex items-center gap-1.5">
+                      {selectedPlan.name} Plan
+                      <Badge className={`text-[9px] px-1.5 py-0 ${selectedPlan.badgeColor}`}>{selectedPlan.badge}</Badge>
+                    </span>
+                    <span className="font-medium">{formatPrice(selectedPlan.price)}</span>
                   </div>
                   {calculatePrice().extraServices > 0 && (
                     <div className="flex items-center justify-between text-sm">

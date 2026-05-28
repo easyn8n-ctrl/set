@@ -261,7 +261,7 @@ const pricingPlans: PricingPlan[] = [
     id: 'starter',
     name: 'Starter',
     subtitle: 'Essential Launch',
-    price: 499,
+    price: 599,
     pages: '1 Page',
     includedFeatures: 3,
     extraFeaturePrice: 30,
@@ -330,8 +330,8 @@ const pricingPlans: PricingPlan[] = [
     id: 'premium',
     name: 'Premium',
     subtitle: 'Enterprise Solution',
-    price: 1499,
-    originalPrice: 1999,
+    price: 1199,
+    originalPrice: 1499,
     pages: 'Up to 10 Pages',
     includedFeatures: 10,
     extraFeaturePrice: 0,
@@ -1628,10 +1628,10 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
           >
-            Your Professional Website
+            Pay Once, Get Everything
             <br />
             <span className="bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-300 bg-clip-text text-transparent">
-              in Just 3 Days
+              For 3 Full Years!
             </span>
           </motion.h1>
 
@@ -1700,7 +1700,7 @@ export default function Home() {
             {[
               { value: '500+', label: 'NA Businesses' },
               { value: '3', label: 'Days Delivery' },
-              { value: formatPrice(499).replace(/ [A-Z]+$/, ''), label: `Starting from ${userCurrency}` },
+              { value: formatPrice(599).replace(/ [A-Z]+$/, ''), label: `Starting from ${userCurrency}` },
               { value: '100%', label: 'Ownership' },
             ].map((stat) => (
               <div key={stat.label} className="text-center">

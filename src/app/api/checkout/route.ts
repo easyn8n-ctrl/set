@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
 // POST /api/checkout - Create order and optionally Stripe checkout session
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 3 checkouts per 5 minutes per IP
+    const clientKey = `checkout:${getClientIp(request)}`;
+    if (!rateLimit(clientKey, 3, 5 * 60 * 1000)) {
+      return NextResponse.json({ error: 'Too many checkout attempts. Please wait a moment.' }, { status: 429 });
+    }
+
     const body = await request.json();
 
     // ---- Promo code validation (optional) ----
@@ -126,9 +133,7 @@ export async function POST(request: NextRequest) {
       // Create Stripe checkout session
       try {
         const Stripe = (await import('stripe')).default;
-        const stripe = new Stripe(stripeSecretKey!, {
-          apiVersion: '2025-04-30.basil',
-        });
+        const stripe = new Stripe(stripeSecretKey!);
 
         const lineItemName = `${body.websiteType} - Professional Website Package`;
         const lineItemDescription = `Complete website for ${body.businessName} including 3 services, 3 years hosting, domain, SSL, and lifetime ownership. Delivery in 3 business days.`;

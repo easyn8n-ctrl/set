@@ -1,33 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { verifyAdminToken, extractBearerToken } from '@/lib/auth-utils';
 
 // GET /api/orders - List all orders (protected)
 export async function GET(request: NextRequest) {
   try {
-    // Verify admin authorization
-    const authHeader = request.headers.get('authorization');
-    const adminToken = authHeader?.replace('Bearer ', '');
-
-    if (!adminToken) {
-      return NextResponse.json({ error: 'Authorization required' }, { status: 401 });
-    }
-
-    // Verify admin token (basic check)
-    const { createHmac } = await import('crypto');
-    try {
-      const decoded = Buffer.from(adminToken, 'base64').toString('utf-8');
-      const [payload, signature] = decoded.split('.');
-      if (!payload || !signature) {
-        return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-      }
-      const secret = process.env.NEXTAUTH_SECRET || 'fallback-secret';
-      const expectedSig = createHmac('sha256', secret).update(payload).digest('hex');
-      if (signature !== expectedSig) {
-        return NextResponse.json({ error: 'Invalid token signature' }, { status: 401 });
-      }
-    } catch {
-      return NextResponse.json({ error: 'Invalid token format' }, { status: 401 });
-    }
+    // Verify admin authorization using proper auth-utils (checks token expiry)
+    const token = extractBearerToken(request);
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const adminId = verifyAdminToken(token);
+    if (!adminId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');

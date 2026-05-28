@@ -7,10 +7,13 @@ const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
  * Format (base64): "{adminId}:{createdAt}:{nonce}.{signature}"
  */
 export function createSignedToken(adminId: string): string {
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    throw new Error('NEXTAUTH_SECRET environment variable is not set. This is required for authentication.');
+  }
   const createdAt = Date.now().toString();
   const nonce = randomBytes(16).toString('hex');
   const payload = `${adminId}:${createdAt}:${nonce}`;
-  const secret = process.env.NEXTAUTH_SECRET || 'fallback-secret';
   const signature = createHmac('sha256', secret).update(payload).digest('hex');
   return Buffer.from(`${payload}.${signature}`).toString('base64');
 }
@@ -21,7 +24,8 @@ export function createSignedToken(adminId: string): string {
  */
 export function verifyAdminToken(token: string): string | null {
   try {
-    const secret = process.env.NEXTAUTH_SECRET || 'fallback-secret';
+    const secret = process.env.NEXTAUTH_SECRET;
+    if (!secret) return null;
     const decoded = Buffer.from(token, 'base64').toString('utf-8');
     const lastDot = decoded.lastIndexOf('.');
     if (lastDot === -1) return null;

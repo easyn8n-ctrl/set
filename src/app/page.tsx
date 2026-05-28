@@ -735,8 +735,8 @@ export default function Home() {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
         if (tz.startsWith('America/New_York') || tz.startsWith('America/Chicago') || tz.startsWith('America/Denver') || tz.startsWith('America/Los_Angeles') || tz.startsWith('America/Phoenix')) setUserCurrency('USD');
         else if (tz.startsWith('America/Sao_Paulo') || tz.startsWith('America/Manaus')) setUserCurrency('BRL');
+        else if (tz === 'Europe/London') setUserCurrency('GBP');
         else if (tz.startsWith('Europe/') || tz.startsWith('Atlantic/')) setUserCurrency('EUR');
-        else if (tz.startsWith('Europe/London')) setUserCurrency('GBP');
         else if (tz.startsWith('America/Mexico_City') || tz.startsWith('America/Tijuana')) setUserCurrency('MXN');
         else if (tz.startsWith('Australia/')) setUserCurrency('AUD');
         else if (tz.startsWith('Asia/Kolkata') || tz.startsWith('Asia/Calcutta')) setUserCurrency('INR');
@@ -1154,6 +1154,7 @@ export default function Home() {
   // Submit order + proceed to payment (with promo code)
   const handleSubmitOrder = async () => {
     if (!formData.businessName || !formData.city || !formData.phone) return;
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) return;
     setIsSubmittingOrder(true);
     const { totalPrice } = calculatePrice();
     const amountInCents = totalPrice * 100;
@@ -1216,17 +1217,8 @@ export default function Home() {
     setIsProcessingPayment(true);
     // Simulate processing delay
     await new Promise(resolve => setTimeout(resolve, 2000));
-    try {
-      if (createdOrderId && !createdOrderId.startsWith('demo-')) {
-        await fetch(`/api/orders/${createdOrderId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'paid' }),
-        });
-      }
-    } catch {
-      // silently fail
-    }
+    // In demo mode (no Stripe), the order remains 'pending' in the database
+    // Admin can manually update the status to 'paid' from the dashboard
     setIsProcessingPayment(false);
     setPaymentStep('success');
   };
@@ -4374,7 +4366,7 @@ export default function Home() {
                   <p className="text-xs text-muted-foreground">
                     1. We&apos;ll review your details within 24 hours<br />
                     2. You&apos;ll receive a confirmation email<br />
-                    3. Your website will be ready in 3 business days
+                    3. We&apos;ll start building your website right away
                   </p>
                 </div>
               </div>

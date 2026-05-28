@@ -12,9 +12,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2025-04-30.basil',
-    });
+    const stripe = new Stripe(stripeSecretKey);
 
     const body = await request.text();
     const signature = request.headers.get('stripe-signature');
@@ -31,6 +29,11 @@ export async function POST(request: NextRequest) {
         const orderId = session.metadata?.orderId;
 
         if (orderId) {
+          const order = await db.order.findUnique({ where: { id: orderId } });
+          // Idempotency check — don't process the same event twice
+          if (order && order.status === 'paid') {
+            return NextResponse.json({ received: true, message: 'Already processed' });
+          }
           await db.order.update({
             where: { id: orderId },
             data: {

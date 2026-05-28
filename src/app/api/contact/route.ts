@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyAdmin } from '@/lib/auth';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
 // POST - Customer sends a message
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: 5 messages per minute per IP
+    const clientKey = `contact:${getClientIp(request)}`;
+    if (!rateLimit(clientKey, 5, 60 * 1000)) {
+      return NextResponse.json({ error: 'Too many messages. Please wait a moment.' }, { status: 429 });
+    }
+
     const body = await request.json();
     const { name, email, message, fileData, fileName, fileType, fileSize } = body;
 
@@ -12,7 +19,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Name, email, and message are required' }, { status: 400 });
     }
 
-    // Validate file if present (max 5MB, base64)
+    // Validate file size (max 5MB)
+    if (fileData) {
+      const decodedSize = Math.ceil((fileData.length * 3) / 4);
+      if (decodedSize > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: 'File size must be less than 5MB' }, { status: 400 });
+      }
+    }
+
     let fileUrl: string | null = null;
     if (fileData) {
       fileUrl = fileData;

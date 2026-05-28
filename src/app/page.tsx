@@ -1116,7 +1116,7 @@ export default function Home() {
           service1: selectedServices[0] || '',
           service2: selectedServices[1] || '',
           service3: selectedServices[2] || '',
-          websiteType: selectedProduct?.title || formData.businessType,
+          websiteType: selectedProduct?.title || formData.businessType || 'Custom Website',
           amount: amountInCents,
           promoCode: appliedPromo?.valid ? appliedPromo.code : undefined,
         }),
@@ -1140,7 +1140,7 @@ export default function Home() {
             service1: selectedServices[0] || '',
             service2: selectedServices[1] || '',
             service3: selectedServices[2] || '',
-            websiteType: selectedProduct?.title || formData.businessType,
+            websiteType: selectedProduct?.title || formData.businessType || 'Custom Website',
             amount: amountInCents,
             promoCode: appliedPromo?.valid ? appliedPromo.code : undefined,
           }),
@@ -1653,7 +1653,7 @@ export default function Home() {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="mb-12"
           >
-            <a href="#products">
+            <a href="#pricing">
               <Button size="lg" className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white gap-2 text-lg px-10 h-13 rounded-full shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all duration-300">
                 Discover Packages
                 <ArrowRight className="h-5 w-5" />
@@ -1716,7 +1716,7 @@ export default function Home() {
             animate={{ y: [0, 8, 0] }}
             transition={{ duration: 2, repeat: Infinity }}
           >
-            <a href="#products" className="text-white/40 hover:text-white/80 transition-colors">
+            <a href="#pricing" className="text-white/40 hover:text-white/80 transition-colors">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
               </svg>
@@ -2159,27 +2159,38 @@ export default function Home() {
                   </CardContent>
 
                   <CardFooter className="p-5 pt-0">
-                    <a href="#products" className="w-full">
-                      <Button
-                        className={`w-full gap-2 h-11 text-sm font-medium ${
-                          plan.popular
-                            ? 'bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white shadow-md shadow-emerald-500/20'
-                            : 'bg-background border-2 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
-                        }`}
-                      >
-                        {plan.popular ? (
-                          <>
-                            <Zap className="h-4 w-4" />
-                            Get Started
-                          </>
-                        ) : (
-                          <>
-                            <ArrowRight className="h-4 w-4" />
-                            Choose Plan
-                          </>
-                        )}
-                      </Button>
-                    </a>
+                    <Button
+                      className={`w-full gap-2 h-11 text-sm font-medium ${
+                        plan.popular
+                          ? 'bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white shadow-md shadow-emerald-500/20'
+                          : 'bg-background border-2 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
+                      }`}
+                      onClick={() => {
+                        setSelectedPlan(plan);
+                        setSelectedProduct(null);
+                        setPaymentStep('form');
+                        setFormData({
+                          ...formData,
+                          businessType: '',
+                          language: 'English',
+                        });
+                        setSelectedServices([]);
+                        setSelectedColor('Emerald');
+                        setOrderDialogOpen(true);
+                      }}
+                    >
+                      {plan.popular ? (
+                        <>
+                          <Zap className="h-4 w-4" />
+                          Get Started
+                        </>
+                      ) : (
+                        <>
+                          <ArrowRight className="h-4 w-4" />
+                          Choose Plan
+                        </>
+                      )}
+                    </Button>
                   </CardFooter>
                 </Card>
               </motion.div>
@@ -3290,15 +3301,23 @@ export default function Home() {
             <>
               <DialogHeader>
                 <DialogTitle className="text-xl flex items-center gap-2">
-                  {selectedProduct && (
+                  {selectedProduct ? (
                     <>
                       <selectedProduct.icon className="h-5 w-5 text-emerald-500" />
                       Order: {selectedProduct.title}
                     </>
+                  ) : (
+                    <>
+                      <Crown className="h-5 w-5 text-emerald-500" />
+                      Order: {selectedPlan.name} Plan — {selectedPlan.subtitle}
+                    </>
                   )}
                 </DialogTitle>
                 <DialogDescription>
-                  Fill in the details below and proceed to payment
+                  {selectedProduct
+                    ? `Customize your ${selectedProduct.title} website and proceed to payment`
+                    : 'Fill in your business details, choose features, and proceed to payment'
+                  }
                 </DialogDescription>
               </DialogHeader>
 
@@ -3342,6 +3361,41 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
+
+                {!selectedProduct && (
+                  <>
+                    <Separator />
+                    <div className="space-y-3">
+                      <h4 className="font-medium text-sm text-muted-foreground">Website / Business Type</h4>
+                      <p className="text-xs text-muted-foreground">Select your business type so we can tailor the website features for you</p>
+                      <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                        {products.map((product) => (
+                          <button
+                            key={product.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedProduct(product);
+                              const productServices = allServices[product.id] || product.services;
+                              setSelectedServices(productServices.slice(0, Math.min(selectedPlan.includedFeatures, productServices.length)));
+                              setFormData({ ...formData, businessType: product.category });
+                            }}
+                            className={`flex items-center gap-2 rounded-lg border p-2.5 text-left transition-colors ${
+                              formData.businessType === product.category
+                                ? 'border-emerald-500/50 bg-emerald-500/10'
+                                : 'border-border hover:border-emerald-500/30 hover:bg-muted/50'
+                            }`}
+                          >
+                            <product.icon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium truncate">{product.title}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">{product.category}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <Separator />
 
@@ -3420,7 +3474,9 @@ export default function Home() {
                 {/* Services */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <h4 className="font-medium text-sm text-muted-foreground">Select Website Features</h4>
+                    <h4 className="font-medium text-sm text-muted-foreground">
+                      Select Website Features {selectedProduct ? `for ${selectedProduct.title}` : ''}
+                    </h4>
                     <span className="text-xs text-muted-foreground">
                       {Math.min(selectedServices.length, selectedPlan.includedFeatures)}/{selectedPlan.includedFeatures} included
                       {selectedServices.length > selectedPlan.includedFeatures && selectedPlan.extraFeaturePrice > 0 && (
@@ -3432,7 +3488,16 @@ export default function Home() {
                   </div>
                   <p className="text-xs text-muted-foreground">Choose the website features you need. The first {selectedPlan.includedFeatures} are included in the {selectedPlan.name} plan. {selectedPlan.extraFeaturePrice > 0 ? `Each additional feature adds ${formatPrice(selectedPlan.extraFeaturePrice)}.` : 'All features are included!'}</p>
                   <div className="grid grid-cols-1 gap-2 max-h-64 overflow-y-auto pr-1">
-                    {(selectedProduct ? (allServices[selectedProduct.id] || selectedProduct.services) : []).map((service) => {
+                    {(selectedProduct
+                      ? (allServices[selectedProduct.id] || selectedProduct.services)
+                      : formData.businessType
+                        ? (() => {
+                            const matchingProducts = products.filter(p => p.category === formData.businessType);
+                            const baseProduct = matchingProducts[0];
+                            return baseProduct ? (allServices[baseProduct.id] || baseProduct.services) : [];
+                          })()
+                        : []
+                    ).map((service) => {
                       const isSelected = selectedServices.includes(service);
                       const serviceIndex = isSelected ? selectedServices.indexOf(service) : -1;
                       const isIncluded = serviceIndex >= 0 && serviceIndex < selectedPlan.includedFeatures;
@@ -3825,6 +3890,7 @@ export default function Home() {
                     <span className="text-sm flex items-center gap-1.5">
                       {selectedPlan.name} Plan
                       <Badge className={`text-[9px] px-1.5 py-0 ${selectedPlan.badgeColor}`}>{selectedPlan.badge}</Badge>
+                      {selectedProduct && <span className="text-xs text-muted-foreground ml-1">• {selectedProduct.title}</span>}
                     </span>
                     <span className="font-medium">{formatPrice(selectedPlan.price)}</span>
                   </div>
@@ -3914,7 +3980,7 @@ export default function Home() {
                 <Button
                   className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white gap-2"
                   onClick={handleSubmitOrder}
-                  disabled={isSubmittingOrder || !formData.businessName || !formData.city || !formData.phone || selectedServices.length === 0}
+                  disabled={isSubmittingOrder || !formData.businessName || !formData.city || !formData.phone || (!selectedProduct && !formData.businessType) || selectedServices.length === 0}
                 >
                   {isSubmittingOrder ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

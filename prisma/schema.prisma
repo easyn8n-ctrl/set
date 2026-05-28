@@ -109,3 +109,18 @@ model VerificationToken {
 
   @@unique([identifier, token])
 }
+
+model ContactMessage {
+  id         String   @id @default(cuid())
+  name       String
+  email      String
+  message    String
+  fileUrl    String?
+  fileName   String?
+  fileType   String?
+  fileSize   Int?
+  isRead     Boolean  @default(false)
+  isAdmin    Boolean  @default(false)
+  replyTo    String?
+  createdAt  DateTime @default(now())
+}

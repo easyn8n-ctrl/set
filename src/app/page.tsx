@@ -27,7 +27,7 @@ import {
   Lock, DollarSign, TrendingUp, Package, RefreshCw, CreditCard, Loader2, LogOut, ChevronLeft, ChevronRight,
   BarChart3,
   Palette, Languages, MapPin, Download, Bot, UserCircle, Info, MessageSquare, EyeOff, UserPlus,
-  ImagePlus, Link2, Copy, Upload, Trash2, ZoomIn, Plus, Tag
+  ImagePlus, Link2, Copy, Upload, Trash2, ZoomIn, Plus, Tag, Paperclip, CheckCheck, User
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useSession, signIn, signOut } from 'next-auth/react';
@@ -592,11 +592,38 @@ export default function Home() {
   const [newPromo, setNewPromo] = useState({ code: '', discountPercent: '', discountAmount: '', maxUses: '100', expiresAt: '', minOrderAmount: '0' });
 
   // Admin tab state
-  const [adminTab, setAdminTab] = useState<'overview' | 'orders' | 'products' | 'promos' | 'payments'>('overview');
+  const [adminTab, setAdminTab] = useState<'overview' | 'orders' | 'products' | 'promos' | 'payments' | 'messages'>('overview');
 
   // Currency state
   const [userCurrency, setUserCurrency] = useState('CAD');
   const [currencyOpen, setCurrencyOpen] = useState(false);
+
+  // Contact Chat state
+  const [contactChatOpen, setContactChatOpen] = useState(false);
+  const [contactMessages, setContactMessages] = useState<Array<{
+    id: string; name: string; email: string; message: string;
+    fileUrl?: string | null; fileName?: string | null; fileType?: string | null;
+    isAdmin: boolean; isRead: boolean; createdAt: string;
+  }>>([]);
+  const [contactInput, setContactInput] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactSending, setContactSending] = useState(false);
+  const [contactFile, setContactFile] = useState<File | null>(null);
+  const [contactFilePreview, setContactFilePreview] = useState<string | null>(null);
+
+  // Admin Messages state
+  const [adminMessages, setAdminMessages] = useState<Array<{
+    id: string; name: string; email: string; message: string;
+    fileUrl?: string | null; fileName?: string | null; fileType?: string | null; fileSize?: number | null;
+    isAdmin: boolean; isRead: boolean; replyTo?: string | null; createdAt: string;
+  }>>([]);
+  const [adminUnreadCount, setAdminUnreadCount] = useState(0);
+  const [adminReplyTo, setAdminReplyTo] = useState<string | null>(null);
+  const [adminReplyText, setAdminReplyText] = useState('');
+  const [adminReplySending, setAdminReplySending] = useState(false);
+  const [adminMessageDetail, setAdminMessageDetail] = useState<typeof adminMessages[0] | null>(null);
+  const [adminMessageThread, setAdminMessageThread] = useState<typeof adminMessages>([]);
 
   // Chat state
   const [chatOpen, setChatOpen] = useState(false);
@@ -1004,6 +1031,22 @@ export default function Home() {
     }
   }, [orderStatusFilter, orderSearch, orderPage, dateFrom, dateTo, adminToken]);
 
+  // Fetch admin messages
+  const fetchAdminMessages = useCallback(async () => {
+    try {
+      const token = adminToken || (typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null);
+      if (!token) return;
+      const res = await fetch('/api/contact', {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAdminMessages(data.messages || []);
+        setAdminUnreadCount(data.unreadCount || 0);
+      }
+    } catch { /* silently */ }
+  }, [adminToken]);
+
   // Fetch promo codes (admin)
   const fetchPromos = useCallback(async () => {
     try {
@@ -1049,8 +1092,17 @@ export default function Home() {
       fetchOrders();
       fetchStats();
       if (adminTab === 'promos') fetchPromos();
+      fetchAdminMessages();
     }
-  }, [view, adminLoggedIn, fetchOrders, fetchStats, adminTab, fetchPromos]);
+  }, [view, adminLoggedIn, fetchOrders, fetchStats, adminTab, fetchPromos, fetchAdminMessages]);
+
+  // Poll for new contact messages every 30 seconds
+  useEffect(() => {
+    if (view === 'admin' && adminLoggedIn) {
+      const interval = setInterval(fetchAdminMessages, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [view, adminLoggedIn, fetchAdminMessages]);
 
   // Admin login handler
   const handleAdminLogin = async () => {
@@ -1286,6 +1338,122 @@ export default function Home() {
         body: JSON.stringify({ id }),
       });
       if (res.ok) fetchPromos();
+    } catch { /* silently */ }
+  };
+
+  // Send contact message
+  const handleSendContactMessage = async () => {
+    if (!contactInput.trim() && !contactFile) return;
+    if (!contactName.trim() || !contactEmail.trim()) return;
+    setContactSending(true);
+    try {
+      let fileData: string | undefined;
+      let fileName: string | undefined;
+      let fileType: string | undefined;
+      let fileSize: number | undefined;
+      
+      if (contactFile && contactFilePreview) {
+        fileData = contactFilePreview;
+        fileName = contactFile.name;
+        fileType = contactFile.type;
+        fileSize = contactFile.size;
+      }
+
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: contactName.trim(),
+          email: contactEmail.trim(),
+          message: contactInput.trim(),
+          fileData,
+          fileName,
+          fileType,
+          fileSize,
+        }),
+      });
+
+      if (res.ok) {
+        setContactMessages(prev => [...prev, {
+          id: 'temp-' + Date.now(),
+          name: contactName.trim(),
+          email: contactEmail.trim(),
+          message: contactInput.trim(),
+          fileUrl: contactFilePreview,
+          fileName: contactFile?.name,
+          fileType: contactFile?.type,
+          isAdmin: false,
+          isRead: false,
+          createdAt: new Date().toISOString(),
+        }]);
+        setContactInput('');
+        setContactFile(null);
+        setContactFilePreview(null);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setContactSending(false);
+    }
+  };
+
+  // Handle file attachment in contact chat
+  const handleContactFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB');
+      return;
+    }
+    setContactFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setContactFilePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  // Admin reply handler
+  const handleAdminReply = async () => {
+    if (!adminReplyText.trim() || !adminReplyTo) return;
+    setAdminReplySending(true);
+    try {
+      const token = adminToken || (typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null);
+      if (!token) return;
+      const res = await fetch('/api/contact', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ messageId: adminReplyTo, action: 'reply', replyMessage: adminReplyText.trim() }),
+      });
+      if (res.ok) {
+        setAdminReplyText('');
+        fetchAdminMessages();
+        if (adminMessageDetail) {
+          const threadRes = await fetch('/api/contact', {
+            headers: { 'Authorization': `Bearer ${token}` },
+          });
+          if (threadRes.ok) {
+            const data = await threadRes.json();
+            setAdminMessageThread((data.messages || []).filter((m: typeof adminMessages[0]) => 
+              m.id === adminMessageDetail.id || m.replyTo === adminMessageDetail.id || m.id === adminReplyTo
+            ));
+          }
+        }
+      }
+    } catch { /* silently */ } finally {
+      setAdminReplySending(false);
+    }
+  };
+
+  // Mark all messages as read
+  const handleMarkAllRead = async () => {
+    try {
+      const token = adminToken || (typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null);
+      if (!token) return;
+      await fetch('/api/contact', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ action: 'markAllRead' }),
+      });
+      fetchAdminMessages();
     } catch { /* silently */ }
   };
 
@@ -2230,19 +2398,23 @@ export default function Home() {
               viewport={{ once: true }}
               transition={{ duration: 0.3 }}
             >
-              <Card className="text-center hover:shadow-md transition-shadow">
+              <Card
+                className="text-center hover:shadow-lg transition-all cursor-pointer group border-emerald-500/20 hover:border-emerald-500/50"
+                onClick={() => setContactChatOpen(true)}
+              >
                 <CardContent className="p-8 space-y-4">
-                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center mx-auto">
-                    <Mail className="h-6 w-6 text-white" />
+                  <div className="relative mx-auto w-14 h-14">
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 animate-ping opacity-20" />
+                    <div className="relative w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+                      <MessageCircle className="h-6 w-6 text-white" />
+                    </div>
                   </div>
-                  <h3 className="text-xl font-bold">Email Us</h3>
-                  <p className="text-muted-foreground">We typically respond within 24 hours</p>
-                  <a href="mailto:info@webcraft.ca" className="inline-block">
-                    <Button className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white gap-2">
-                      <Mail className="h-4 w-4" />
-                      info@webcraft.ca
-                    </Button>
-                  </a>
+                  <h3 className="text-xl font-bold">Chat With Us</h3>
+                  <p className="text-muted-foreground">Send us a message, images, or files. We respond within 24 hours.</p>
+                  <Button className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white gap-2 group-hover:shadow-md group-hover:shadow-emerald-500/20 transition-all">
+                    <MessageCircle className="h-4 w-4" />
+                    Start Conversation
+                  </Button>
                 </CardContent>
               </Card>
             </motion.div>
@@ -2324,6 +2496,7 @@ export default function Home() {
               { id: 'products' as const, label: 'Products', icon: ShoppingBag },
               { id: 'promos' as const, label: 'Promo Codes', icon: Tag },
               { id: 'payments' as const, label: 'Payments', icon: CreditCard },
+              { id: 'messages' as const, label: 'Messages', icon: MessageCircle },
             ]).map(tab => (
               <button
                 key={tab.id}
@@ -2833,6 +3006,85 @@ export default function Home() {
                 )}
               </CardContent>
             </Card>
+          </motion.div>
+        )}
+
+        {/* ====== MESSAGES TAB ====== */}
+        {adminTab === 'messages' && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+            {/* Header with actions */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h3 className="text-lg font-bold">Contact Messages</h3>
+                {adminUnreadCount > 0 && (
+                  <Badge className="bg-red-500 text-white border-0">{adminUnreadCount} unread</Badge>
+                )}
+              </div>
+              {adminUnreadCount > 0 && (
+                <Button variant="outline" size="sm" onClick={handleMarkAllRead} className="gap-1.5">
+                  <CheckCheck className="h-3.5 w-3.5" />
+                  Mark All Read
+                </Button>
+              )}
+            </div>
+
+            {/* Messages List */}
+            <div className="space-y-2">
+              {adminMessages.filter(m => !m.isAdmin).length === 0 ? (
+                <Card className="border-border/50">
+                  <CardContent className="p-12 text-center text-muted-foreground">
+                    <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                    <p>No messages yet</p>
+                    <p className="text-sm mt-1">When customers send messages, they&apos;ll appear here</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                adminMessages.filter(m => !m.isAdmin).map((msg) => (
+                  <Card
+                    key={msg.id}
+                    className={`border-border/50 cursor-pointer transition-all hover:border-emerald-500/30 hover:shadow-md ${!msg.isRead ? 'border-l-4 border-l-emerald-500 bg-emerald-500/5' : ''}`}
+                    onClick={() => {
+                      const token = adminToken || localStorage.getItem('admin_token');
+                      if (token && !msg.isRead) {
+                        fetch('/api/contact', {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                          body: JSON.stringify({ messageId: msg.id, action: 'markRead' }),
+                        }).then(() => fetchAdminMessages());
+                      }
+                      setAdminMessageDetail(msg);
+                      setAdminMessageThread(adminMessages.filter(m => m.id === msg.id || m.replyTo === msg.id));
+                      setAdminReplyTo(msg.id);
+                      setAdminReplyText('');
+                    }}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {!msg.isRead && <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />}
+                            <span className="font-medium text-sm truncate">{msg.name}</span>
+                            <span className="text-xs text-muted-foreground truncate">{msg.email}</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground line-clamp-2">{msg.message}</p>
+                          {msg.fileUrl && (
+                            <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                              <Paperclip className="h-3 w-3" />
+                              <span>{msg.fileName || 'Attachment'}</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                          {new Date(msg.createdAt).toLocaleDateString()}
+                          <br />
+                          {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </div>
           </motion.div>
         )}
 
@@ -4159,6 +4411,189 @@ export default function Home() {
               </DialogFooter>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Contact Chat Dialog */}
+      <Dialog open={contactChatOpen} onOpenChange={setContactChatOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="p-5 pb-3 border-b border-border">
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <MessageCircle className="h-5 w-5 text-emerald-500" />
+              Chat With Us
+            </DialogTitle>
+            <DialogDescription>
+              Send us a message and we&apos;ll get back to you as soon as possible
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Messages Area */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[200px] max-h-[400px]">
+            {contactMessages.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm text-center py-8">
+                <div className="space-y-2">
+                  <MessageCircle className="h-10 w-10 mx-auto opacity-30" />
+                  <p>No messages yet. Start the conversation!</p>
+                </div>
+              </div>
+            ) : (
+              contactMessages.map((msg) => (
+                <div key={msg.id} className={`flex ${msg.isAdmin ? 'justify-start' : 'justify-end'}`}>
+                  <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
+                    msg.isAdmin
+                      ? 'bg-muted border border-border'
+                      : 'bg-gradient-to-r from-emerald-600 to-teal-500 text-white'
+                  }`}>
+                    {msg.isAdmin && (
+                      <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">{msg.name}</p>
+                    )}
+                    <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                    {msg.fileUrl && (
+                      <div className="mt-2">
+                        {msg.fileType?.startsWith('image/') ? (
+                          <img src={msg.fileUrl} alt={msg.fileName || 'Attachment'} className="max-w-full max-h-40 rounded-lg object-cover cursor-pointer" onClick={() => window.open(msg.fileUrl!, '_blank')} />
+                        ) : (
+                          <a href={msg.fileUrl} download={msg.fileName || 'file'} className="flex items-center gap-2 text-sm underline opacity-80 hover:opacity-100">
+                            <Paperclip className="h-3.5 w-3.5" />
+                            {msg.fileName || 'Download file'}
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    <p className={`text-[10px] mt-1 ${msg.isAdmin ? 'text-muted-foreground' : 'text-white/60'}`}>
+                      {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+            {contactSending && (
+              <div className="flex justify-end">
+                <div className="max-w-[80%] rounded-2xl px-4 py-2.5 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                  <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input Area */}
+          <div className="border-t border-border p-4 space-y-3">
+            {/* Name & Email (shown if first message) */}
+            {contactMessages.length === 0 && (
+              <div className="grid grid-cols-2 gap-2">
+                <Input placeholder="Your Name *" value={contactName} onChange={(e) => setContactName(e.target.value)} className="text-sm h-9" />
+                <Input placeholder="Your Email *" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} type="email" className="text-sm h-9" />
+              </div>
+            )}
+
+            {/* File Preview */}
+            {contactFilePreview && (
+              <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-2">
+                {contactFile?.type?.startsWith('image/') ? (
+                  <img src={contactFilePreview} alt="Preview" className="h-10 w-10 rounded object-cover" />
+                ) : (
+                  <FileText className="h-5 w-5 text-muted-foreground" />
+                )}
+                <span className="text-xs flex-1 truncate">{contactFile?.name}</span>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setContactFile(null); setContactFilePreview(null); }}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+
+            {/* Message Input + Actions */}
+            <div className="flex items-end gap-2">
+              <div className="flex-1 relative">
+                <Textarea
+                  placeholder="Type your message..."
+                  value={contactInput}
+                  onChange={(e) => setContactInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendContactMessage(); } }}
+                  className="min-h-[44px] max-h-[100px] resize-none pr-10 text-sm"
+                  rows={1}
+                />
+                <label className="absolute right-2 bottom-2 cursor-pointer p-1 rounded-md hover:bg-muted/50 transition-colors">
+                  <Paperclip className="h-4 w-4 text-muted-foreground" />
+                  <input type="file" className="hidden" accept="image/*,.pdf,.doc,.docx,.txt,.zip" onChange={handleContactFileChange} />
+                </label>
+              </div>
+              <Button
+                className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white h-11 w-11 p-0 flex-shrink-0"
+                onClick={handleSendContactMessage}
+                disabled={contactSending || (!contactInput.trim() && !contactFile) || (contactMessages.length === 0 && (!contactName.trim() || !contactEmail.trim()))}
+              >
+                {contactSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Message Detail Dialog */}
+      <Dialog open={!!adminMessageDetail} onOpenChange={(open) => { if (!open) setAdminMessageDetail(null); }}>
+        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="p-5 pb-3 border-b border-border">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                <User className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg">{adminMessageDetail?.name}</DialogTitle>
+                <DialogDescription>{adminMessageDetail?.email} &bull; {adminMessageDetail && new Date(adminMessageDetail.createdAt).toLocaleString()}</DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {/* Thread */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[200px] max-h-[350px]">
+            {adminMessageThread.map((msg) => (
+              <div key={msg.id} className={`flex ${msg.isAdmin ? 'justify-start' : 'justify-end'}`}>
+                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+                  msg.isAdmin
+                    ? 'bg-emerald-500/10 border border-emerald-500/20'
+                    : 'bg-muted border border-border'
+                }`}>
+                  <p className="text-xs font-medium mb-1 text-emerald-600 dark:text-emerald-400">{msg.isAdmin ? 'You (Admin)' : msg.name}</p>
+                  <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                  {msg.fileUrl && (
+                    <div className="mt-2">
+                      {msg.fileType?.startsWith('image/') ? (
+                        <img src={msg.fileUrl} alt={msg.fileName || 'Attachment'} className="max-w-full max-h-40 rounded-lg object-cover cursor-pointer" onClick={() => window.open(msg.fileUrl!, '_blank')} />
+                      ) : (
+                        <a href={msg.fileUrl} download={msg.fileName || 'file'} className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+                          <Paperclip className="h-3.5 w-3.5" />
+                          {msg.fileName || 'Download file'}
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-1">{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Reply Input */}
+          <div className="border-t border-border p-4 space-y-2">
+            <p className="text-xs text-muted-foreground">Reply to {adminMessageDetail?.name}</p>
+            <div className="flex gap-2">
+              <Textarea
+                placeholder="Type your reply..."
+                value={adminReplyText}
+                onChange={(e) => setAdminReplyText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAdminReply(); } }}
+                className="min-h-[44px] max-h-[100px] resize-none text-sm flex-1"
+                rows={1}
+              />
+              <Button
+                className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-700 hover:to-teal-600 text-white h-11 px-4 flex-shrink-0 gap-1.5"
+                onClick={handleAdminReply}
+                disabled={adminReplySending || !adminReplyText.trim()}
+              >
+                {adminReplySending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="h-4 w-4" /> Reply</>}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
